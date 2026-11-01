@@ -3,10 +3,10 @@
 Gemeinsame Koch- und Einkaufs-App für zwei Personen. Sie läuft als Web-App (PWA) auf iPhone und Android, alle Daten
 synchronisieren sich in Echtzeit zwischen beiden Handys.
 
-**Aktueller Stand: Phase 1.** Einkaufsliste (auch offline), Notizen, Rezepte von Hand anlegen, Kategorien, Tags und
-Sterne-Bewertung sind fertig.
+**Aktueller Stand: Phase 1 und Rezept-Import per Link.** Einkaufsliste (auch offline), Notizen, Rezepte von Hand oder
+per Link anlegen, Kategorien, Tags und Sterne-Bewertung sind fertig.
 
-- **Phase 2:** Rezept-Import per Link und Screenshot, Anpassungen bei Bewertungen, Glücksrad
+- **Phase 2 (Rest):** Rezept-Import per Screenshot, Anpassungen bei Bewertungen, Glücksrad
 - **Phase 3:** Entdecken-Tab mit Geschmacksprofil, KI-Vorschlägen und Reste-Modus
 - **Phase 4:** Zutaten aus einem Rezept auf die Einkaufsliste übernehmen
 
@@ -132,12 +132,29 @@ Passwort vergessen? In Phase 1 gibt es dafür keine E-Mail-Funktion. Du kannst d
 npx.cmd supabase secrets set ANTHROPIC_API_KEY=DEIN-KEY
 ```
 
-Die genauen Schritte zum Deployen der Edge Functions folgen mit Phase 2.
+3. Datenbank-Änderungen einspielen und die Funktion veröffentlichen:
+
+```bash
+npx.cmd supabase db push --linked
+```
+
+```bash
+npx.cmd supabase functions deploy import-recipe --use-api
+```
+
+Pro Haushalt sind 50 KI-Aufrufe am Tag erlaubt. Das Limit lässt sich im Supabase-Dashboard in der Tabelle `households`
+in der Spalte `ai_daily_limit` ändern. Das Modell lässt sich mit dem Secret `ANTHROPIC_MODEL` wechseln.
+
+**Grenzen des Link-Imports:** Crack liest Text und Vorschaubild, nicht das Video selbst. Stehen die Zutaten nur im Video
+und nicht in der Beschreibung, bleibt die Zutatenliste leer, denn Crack erfindet nichts. Instagram und manche andere
+Seiten sperren das automatische Auslesen.
 
 ### 8. App auf den Handys installieren
 
 - **iPhone:** Adresse in **Safari** öffnen, dann **Teilen → Zum Home-Bildschirm**.
-- **Android:** Adresse in **Chrome** öffnen, dann **⋮ → App installieren**.
+- **Android:** Adresse in **Chrome** öffnen, dann **⋮ → App installieren**. Meldet Chrome „bereits installiert“, steht
+  Crack schon in der App-Liste. Dann lässt sich das Symbol von dort auf den Startbildschirm ziehen. Danach erscheint Crack
+  auch im **Teilen**-Menü anderer Apps, zum Beispiel in TikTok.
 
 ### 9. So kommen Updates auf die Handys
 

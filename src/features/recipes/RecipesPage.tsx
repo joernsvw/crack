@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, Clock, ImageOff, Plus, Search, SlidersHorizontal } from 'lucide-react'
+import { BookOpen, Clock, ImageOff, Link2, Plus, Search, SlidersHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { EmptyState, ErrorBox, PageHeader, Spinner } from '../../components/ui'
 import { useHousehold } from '../../context/HouseholdContext'
@@ -32,6 +32,9 @@ export function RecipesPage() {
         }
       />
       <main className="mx-auto max-w-2xl px-4">
+        <Link to="/rezepte/import" className="btn btn-primary mb-3 w-full">
+          <Link2 size={20} aria-hidden /> Rezept per Link hinzufügen
+        </Link>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-3.5 text-muted" aria-hidden />
@@ -142,8 +145,8 @@ export function RecipesPage() {
           <Spinner />
         ) : (recipes ?? []).length === 0 ? (
           <EmptyState icon={BookOpen} title="Noch keine Rezepte" text="Sammelt hier alles, was ihr mal kochen wollt.">
-            <Link to="/rezepte/neu" className="btn btn-primary">
-              Erstes Rezept anlegen
+            <Link to="/rezepte/neu" className="btn btn-soft">
+              Von Hand anlegen
             </Link>
           </EmptyState>
         ) : visible.length === 0 ? (

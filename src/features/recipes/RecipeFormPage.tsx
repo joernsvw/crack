@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ImagePlus, Plus, Trash2, X } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ErrorBox, PageHeader, Spinner } from '../../components/ui'
 import { useHousehold } from '../../context/HouseholdContext'
 import { isSafeUrl } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Recipe } from '../../lib/types'
 import { BUCKET, compressImage, saveRecipe, uploadRecipeImage, useCategories, useImageUrl, useRecipes, useTags } from './data'
+import type { ImportedDraft } from './importLink'
 
 interface IngredientRow {
   key: string
@@ -22,6 +23,7 @@ export function RecipeFormPage() {
   const { householdId } = useHousehold()
   const { data: recipes, loading } = useRecipes(householdId)
   const existing = id ? recipes?.find((recipe) => recipe.id === id) : null
+  const draft = (useLocation().state as { draft?: ImportedDraft } | null)?.draft ?? null
 
   if (id && !existing) {
     return (
@@ -32,35 +34,40 @@ export function RecipeFormPage() {
     )
   }
   // key: Das Formular startet erst mit den fertig geladenen Daten.
-  return <RecipeForm key={id ?? 'neu'} existing={existing ?? null} />
+  return <RecipeForm key={id ?? 'neu'} existing={existing ?? null} draft={id ? null : draft} />
 }
 
-function RecipeForm({ existing }: { existing: Recipe | null }) {
+function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: ImportedDraft | null }) {
   const navigate = useNavigate()
   const { householdId } = useHousehold()
   const { data: categories } = useCategories(householdId)
   const { data: allTags } = useTags(householdId)
   const recipeId = useRef(existing?.id ?? crypto.randomUUID()).current
+  const initial = existing ?? draft
+  const initialIngredients = existing?.recipe_ingredients ?? draft?.ingredients ?? []
+  const initialImagePath = initial?.image_path ?? null
 
-  const [title, setTitle] = useState(existing?.title ?? '')
-  const [description, setDescription] = useState(existing?.description ?? '')
-  const [categoryId, setCategoryId] = useState(existing?.category_id ?? '')
-  const [servings, setServings] = useState(existing?.servings?.toString() ?? '')
-  const [minutes, setMinutes] = useState(existing?.total_minutes?.toString() ?? '')
-  const [sourceUrl, setSourceUrl] = useState(existing?.source_url ?? '')
+  const [title, setTitle] = useState(initial?.title ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [categoryId, setCategoryId] = useState(initial?.category_id ?? '')
+  const [servings, setServings] = useState(initial?.servings?.toString() ?? '')
+  const [minutes, setMinutes] = useState(initial?.total_minutes?.toString() ?? '')
+  const [sourceUrl, setSourceUrl] = useState(initial?.source_url ?? '')
   const [ingredients, setIngredients] = useState<IngredientRow[]>(() =>
-    existing?.recipe_ingredients.length
-      ? existing.recipe_ingredients.map((item) => ({
-          key: item.id ?? crypto.randomUUID(),
+    initialIngredients.length
+      ? initialIngredients.map((item) => ({
+          key: crypto.randomUUID(),
           quantity: item.quantity ?? '',
           unit: item.unit ?? '',
           name: item.name,
         }))
       : [newRow()],
   )
-  const [steps, setSteps] = useState<string[]>(existing?.steps.length ? existing.steps : [''])
-  const [tagNames, setTagNames] = useState<string[]>(() =>
-    (allTags ?? []).filter((tag) => existing?.recipe_tags.some((link) => link.tag_id === tag.id)).map((tag) => tag.name),
+  const [steps, setSteps] = useState<string[]>(initial?.steps.length ? initial.steps : [''])
+  const [tagNames, setTagNames] = useState<string[]>(
+    () =>
+      draft?.tags ??
+      (allTags ?? []).filter((tag) => existing?.recipe_tags.some((link) => link.tag_id === tag.id)).map((tag) => tag.name),
   )
   const [tagInput, setTagInput] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -76,7 +83,7 @@ function RecipeForm({ existing }: { existing: Recipe | null }) {
     setTagNames(allTags.filter((tag) => existing.recipe_tags.some((link) => link.tag_id === tag.id)).map((tag) => tag.name))
   }, [allTags, existing])
 
-  const storedUrl = useImageUrl(removeImage ? null : (existing?.image_path ?? null))
+  const storedUrl = useImageUrl(removeImage ? null : initialImagePath)
   const previewUrl = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : null), [imageFile])
   useEffect(
     () => () => {
@@ -109,7 +116,7 @@ function RecipeForm({ existing }: { existing: Recipe | null }) {
     setBusy(true)
     setError(null)
     try {
-      let imagePath = removeImage ? null : (existing?.image_path ?? null)
+      let imagePath = removeImage ? null : initialImagePath
       if (imageFile) {
         imagePath = await uploadRecipeImage(householdId, recipeId, await compressImage(imageFile))
       }
@@ -132,8 +139,8 @@ function RecipeForm({ existing }: { existing: Recipe | null }) {
         },
         existing,
       )
-      if (existing?.image_path && existing.image_path !== imagePath) {
-        await supabase.storage.from(BUCKET).remove([existing.image_path])
+      if (initialImagePath && initialImagePath !== imagePath) {
+        await supabase.storage.from(BUCKET).remove([initialImagePath])
       }
       navigate(`/rezepte/${recipeId}`, { replace: true })
     } catch (err) {
@@ -146,6 +153,13 @@ function RecipeForm({ existing }: { existing: Recipe | null }) {
     <div className="pb-28">
       <PageHeader title={existing ? 'Rezept bearbeiten' : 'Neues Rezept'} back={true} />
       <form id="recipe-form" className="mx-auto max-w-2xl space-y-5 px-4 pt-1" onSubmit={submit}>
+        {draft && (
+          <p className="rounded-xl bg-primary-soft p-3 text-sm text-primary-soft-ink" role="status">
+            {draft.ingredients.length > 0
+              ? 'Entwurf erstellt. Prüfe kurz alles und tippe dann auf Speichern.'
+              : 'In diesem Link standen keine Zutaten, zum Beispiel weil sie nur im Video vorkommen. Crack erfindet nichts: Bitte ergänze sie von Hand.'}
+          </p>
+        )}
         <div>
           <label className="label" htmlFor="title">
             Titel

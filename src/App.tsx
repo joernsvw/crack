@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { CenteredMessage, ErrorBox, Spinner } from './components/ui'
 import { TabLayout } from './components/TabLayout'
@@ -15,6 +16,27 @@ import { NoteEditorPage } from './features/notes/NoteEditorPage'
 import { RecipesPage } from './features/recipes/RecipesPage'
 import { RecipeDetailPage } from './features/recipes/RecipeDetailPage'
 import { RecipeFormPage } from './features/recipes/RecipeFormPage'
+import { RecipeImportPage } from './features/recipes/RecipeImportPage'
+import { extractFirstUrl } from './features/recipes/importLink'
+
+/** Android "Teilen" oeffnet die App mit ?url=... oder ?text=... (Web Share Target im Manifest). */
+function readSharedLink(): string | null {
+  const params = new URLSearchParams(window.location.search)
+  const link = extractFirstUrl([params.get('url'), params.get('text'), params.get('title')].filter(Boolean).join(' '))
+  if (link) window.history.replaceState(null, '', window.location.pathname + window.location.hash)
+  return link
+}
+
+// Beim Laden gemerkt, denn der Link muss eine eventuelle Anmeldung ueberstehen.
+let pendingSharedLink = readSharedLink()
+
+function StartRedirect() {
+  const [link] = useState(pendingSharedLink)
+  useEffect(() => {
+    pendingSharedLink = null
+  }, [])
+  return link ? <Navigate to="/rezepte/import" replace state={{ link }} /> : <Navigate to="/einkauf" replace />
+}
 
 function Protected() {
   const { state, loading, error, reload } = useHouseholdContext()
@@ -38,11 +60,12 @@ function Protected() {
         <Route path="/notizen" element={<NotesPage />} />
       </Route>
       <Route path="/rezepte/neu" element={<RecipeFormPage />} />
+      <Route path="/rezepte/import" element={<RecipeImportPage />} />
       <Route path="/rezepte/:id" element={<RecipeDetailPage />} />
       <Route path="/rezepte/:id/bearbeiten" element={<RecipeFormPage />} />
       <Route path="/notizen/:id" element={<NoteEditorPage />} />
       <Route path="/einstellungen" element={<SettingsPage />} />
-      <Route path="*" element={<Navigate to="/einkauf" replace />} />
+      <Route path="*" element={<StartRedirect />} />
     </Routes>
   )
 }
