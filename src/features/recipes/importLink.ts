@@ -1,6 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
-import type { RecipeDraft } from './data'
+import { compressImage, type RecipeDraft } from './data'
 
 export interface ImportedDraft extends Omit<RecipeDraft, 'tagNames'> {
   tags: string[]
@@ -12,8 +12,35 @@ export function extractFirstUrl(text: string | null | undefined): string | null 
   return match ? match[0].replace(/[),.;!?]+$/, '') : null
 }
 
-export async function importRecipeFromLink(url: string): Promise<ImportedDraft> {
-  const { data, error } = await supabase.functions.invoke('import-recipe', { body: { url } })
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1])
+    reader.onerror = () => reject(new Error('Das Bild konnte nicht gelesen werden.'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+export function importRecipeFromLink(url: string): Promise<ImportedDraft> {
+  return callRecipeFunction({ url })
+}
+
+/** Liefert einen Vorschlag fuer das ganze Rezept. Gespeichert wird erst im Formular. */
+export async function proposeRecipeEdit(recipeId: string, instruction: string, files: File[]): Promise<ImportedDraft> {
+  const screenshots = await Promise.all(
+    files.map(async (file) => {
+      try {
+        return { type: 'image/jpeg', data: await blobToBase64(await compressImage(file)) }
+      } catch {
+        throw new Error(`„${file.name}“ konnte nicht gelesen werden. Bitte nimm einen normalen Screenshot.`)
+      }
+    }),
+  )
+  return callRecipeFunction({ recipe_id: recipeId, instruction, screenshots })
+}
+
+async function callRecipeFunction(body: Record<string, unknown>): Promise<ImportedDraft> {
+  const { data, error } = await supabase.functions.invoke('import-recipe', { body })
   if (error) {
     if (error instanceof FunctionsHttpError) {
       const body = await (error.context as Response).json().catch(() => null)

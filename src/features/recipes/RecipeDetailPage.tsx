@@ -8,6 +8,7 @@ import { formatRelativeDate, isSafeUrl } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Recipe } from '../../lib/types'
 import { averageRating, BUCKET, useCategories, useImageUrl, useRecipes, useTags } from './data'
+import { RecipeAiEdit } from './RecipeAiEdit'
 import { StarsDisplay, StarsInput } from './Stars'
 
 export function RecipeDetailPage() {
@@ -115,6 +116,8 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
 
         {error && <ErrorBox message={error} />}
 
+        <RecipeAiEdit recipeId={recipe.id} />
+
         <section className="card p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -149,10 +152,11 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
           <h2 className="mb-2 text-lg font-bold">Zutaten</h2>
           {recipe.recipe_ingredients.length === 0 ? (
             <p className="text-muted">
-              Noch keine Zutaten eingetragen.{' '}
+              Noch keine Zutaten eingetragen. Füge oben unter „Mit KI anpassen“ einen Screenshot hinzu oder{' '}
               <Link to={`/rezepte/${recipe.id}/bearbeiten`} className="font-semibold text-primary">
-                Jetzt ergänzen
+                trage sie von Hand ein
               </Link>
+              .
             </p>
           ) : (
             <ul className="card divide-y divide-line">

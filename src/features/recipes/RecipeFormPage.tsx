@@ -34,7 +34,7 @@ export function RecipeFormPage() {
     )
   }
   // key: Das Formular startet erst mit den fertig geladenen Daten.
-  return <RecipeForm key={id ?? 'neu'} existing={existing ?? null} draft={id ? null : draft} />
+  return <RecipeForm key={id ?? 'neu'} existing={existing ?? null} draft={draft} />
 }
 
 function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: ImportedDraft | null }) {
@@ -43,8 +43,9 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
   const { data: categories } = useCategories(householdId)
   const { data: allTags } = useTags(householdId)
   const recipeId = useRef(existing?.id ?? crypto.randomUUID()).current
-  const initial = existing ?? draft
-  const initialIngredients = existing?.recipe_ingredients ?? draft?.ingredients ?? []
+  // Ein KI-Vorschlag hat Vorrang vor dem gespeicherten Stand, gespeichert wird er erst mit "Speichern".
+  const initial = draft ?? existing
+  const initialIngredients = draft?.ingredients ?? existing?.recipe_ingredients ?? []
   const initialImagePath = initial?.image_path ?? null
 
   const [title, setTitle] = useState(initial?.title ?? '')
@@ -78,10 +79,10 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
   // Tags koennen erst nach dem ersten Rendern aus dem Netz kommen.
   const tagsReady = useRef((allTags ?? []).length > 0)
   useEffect(() => {
-    if (tagsReady.current || !allTags || !existing) return
+    if (tagsReady.current || !allTags || !existing || draft) return
     tagsReady.current = true
     setTagNames(allTags.filter((tag) => existing.recipe_tags.some((link) => link.tag_id === tag.id)).map((tag) => tag.name))
-  }, [allTags, existing])
+  }, [allTags, existing, draft])
 
   const storedUrl = useImageUrl(removeImage ? null : initialImagePath)
   const previewUrl = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : null), [imageFile])
@@ -155,9 +156,11 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
       <form id="recipe-form" className="mx-auto max-w-2xl space-y-5 px-4 pt-1" onSubmit={submit}>
         {draft && (
           <p className="rounded-xl bg-primary-soft p-3 text-sm text-primary-soft-ink" role="status">
-            {draft.ingredients.length > 0
-              ? 'Entwurf erstellt. Prüfe kurz alles und tippe dann auf Speichern.'
-              : 'In diesem Link standen keine Zutaten, zum Beispiel weil sie nur im Video vorkommen. Crack erfindet nichts: Bitte ergänze sie von Hand.'}
+            {existing
+              ? 'Vorschlag der KI. Noch ist nichts gespeichert: Prüfe die Änderungen und tippe auf Speichern.'
+              : draft.ingredients.length > 0
+                ? 'Entwurf erstellt. Prüfe kurz alles und tippe dann auf Speichern.'
+                : 'In diesem Link standen keine Zutaten, zum Beispiel weil sie nur im Video vorkommen. Speichere das Rezept und füge danach einen Screenshot der Zutaten hinzu.'}
           </p>
         )}
         <div>

@@ -145,9 +145,13 @@ npx.cmd supabase functions deploy import-recipe --use-api
 Pro Haushalt sind 50 KI-Aufrufe am Tag erlaubt. Das Limit lässt sich im Supabase-Dashboard in der Tabelle `households`
 in der Spalte `ai_daily_limit` ändern. Das Modell lässt sich mit dem Secret `ANTHROPIC_MODEL` wechseln.
 
-**Grenzen des Link-Imports:** Crack liest Text und Vorschaubild, nicht das Video selbst. Stehen die Zutaten nur im Video
-und nicht in der Beschreibung, bleibt die Zutatenliste leer, denn Crack erfindet nichts. Instagram und manche andere
-Seiten sperren das automatische Auslesen.
+**Grenzen des Link-Imports:** Crack liest Text und Vorschaubild, nicht das Video selbst. Bei Pinterest liest es auch das
+verlinkte Originalrezept. Stehen die Zutaten nur im Video und nicht in der Beschreibung, bleibt die Zutatenliste leer,
+denn Crack erfindet nichts. Instagram und manche andere Seiten sperren das automatische Auslesen.
+
+**Rezepte mit KI anpassen:** Auf jeder Rezeptseite lässt sich unter „Mit KI anpassen“ ein Wunsch eintippen, zum Beispiel
+„Tofu durch Halloumi ersetzen“, oder ein Screenshot mit Zutaten und Schritten hinzufügen. Crack zeigt den Vorschlag im
+Formular, gespeichert wird erst mit „Speichern“. Das Rezeptbild bleibt dabei unverändert.
 
 ### 8. App auf den Handys installieren
 
