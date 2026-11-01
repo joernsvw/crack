@@ -23,7 +23,7 @@ Die Datenbankstruktur liegt in `supabase/migrations/`.
 
 ## Einrichtung Schritt für Schritt
 
-Die Befehle sind für Windows (PowerShell) und werden im Projektordner ausgeführt. Ersetze `DEIN-NAME` durch deinen
+Die Befehle sind für Windows (PowerShell) und werden im Projektordner ausgeführt. `npx.cmd` statt `npx` umgeht keine Sperre, sondern ist die normale Windows-Variante, die auch bei gesperrten PowerShell-Skripten läuft. Ersetze `DEIN-NAME` durch deinen
 GitHub-Benutzernamen und `DEINE-PROJEKT-ID` durch die Supabase-Projekt-ID.
 
 ### 1. Werkzeuge installieren
@@ -35,7 +35,7 @@ winget install --id GitHub.cli -e
 ```
 
 Danach das Terminal einmal schließen und neu öffnen. Die Supabase CLI braucht keine Installation, sie läuft über
-`npx supabase`.
+`npx.cmd supabase`.
 
 ### 2. GitHub-Repository anlegen
 
@@ -63,15 +63,15 @@ Aktiviere anschließend im Repository unter **Settings → Advanced Security** d
    Bilder-Speicher ein:
 
 ```bash
-npx supabase login
+npx.cmd supabase login
 ```
 
 ```bash
-npx supabase link --project-ref DEINE-PROJEKT-ID
+npx.cmd supabase link --project-ref DEINE-PROJEKT-ID
 ```
 
 ```bash
-npx supabase db push
+npx.cmd supabase db push --linked
 ```
 
 ### 4. GitHub Pages aktivieren und Zugangsdaten setzen
@@ -129,7 +129,7 @@ Passwort vergessen? In Phase 1 gibt es dafür keine E-Mail-Funktion. Du kannst d
 2. Den Key selbst im Terminal eintragen, niemals in einen Chat oder eine Datei kopieren:
 
 ```bash
-npx supabase secrets set ANTHROPIC_API_KEY=DEIN-KEY
+npx.cmd supabase secrets set ANTHROPIC_API_KEY=DEIN-KEY
 ```
 
 Die genauen Schritte zum Deployen der Edge Functions folgen mit Phase 2.
@@ -145,7 +145,7 @@ Jeder Push auf `main` baut und veröffentlicht die App automatisch, das dauert e
 Öffnen und danach stündlich auf eine neue Version. Sie laden sie beim Start oder im Hintergrund von selbst. Ist die App
 gerade offen, erscheint oben der Hinweis **Neue Version – neu laden**, damit keine Eingabe verloren geht.
 
-Änderungen an der Datenbank (neue Dateien in `supabase/migrations/`) spielst du zusätzlich mit `npx supabase db push` ein.
+Änderungen an der Datenbank (neue Dateien in `supabase/migrations/`) spielst du zusätzlich mit `npx.cmd supabase db push --linked` ein.
 
 ## Sicherheit
 
