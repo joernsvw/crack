@@ -16,6 +16,8 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
+        // Feste Kennung der App, unabhaengig von der Start-Adresse.
+        id: 'crack-app',
         name: 'Crack',
         short_name: 'Crack',
         description: 'Gemeinsam einkaufen, kochen und Ideen sammeln.',
