@@ -1,0 +1,3 @@
+# Minimale Konfiguration fuer die Supabase CLI. Auth-Einstellungen (Site-URL, Registrierung)
+# werden im Dashboard gesetzt, siehe README.
+project_id = "crack"
