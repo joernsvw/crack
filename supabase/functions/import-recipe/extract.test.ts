@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeEntities,
   findJsonLdRecipe,
+  findTikTokPost,
   htmlToText,
   isPrivateIp,
   metaContent,
   normalizeDraft,
   parseSafeUrl,
+  pickSubtitle,
+  vttToText,
 } from './extract'
 
 describe('parseSafeUrl', () => {
@@ -96,6 +99,69 @@ describe('findJsonLdRecipe', () => {
     expect(findJsonLdRecipe('<script type="application/ld+json">{kaputt</script>')).toBeNull()
     expect(findJsonLdRecipe(wrap({ '@type': 'Article' }))).toBeNull()
     expect(findJsonLdRecipe('<p>nichts</p>')).toBeNull()
+  })
+})
+
+describe('findTikTokPost', () => {
+  const page = (scope: unknown) =>
+    `<html><script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">${JSON.stringify({ __DEFAULT_SCOPE__: scope })}</script></html>`
+  const item = {
+    desc: 'Tikka Masala: 400 g Tofu #rezept',
+    author: { nickname: 'Koch', uniqueId: 'koch1' },
+    video: {
+      cover: 'https://cdn.example/c.jpg',
+      originCover: 'https://cdn.example/o.jpg',
+      subtitleInfos: [{ Url: 'https://cdn.example/de.vtt', LanguageCodeName: 'deu-DE' }, { Format: 'ohne url' }],
+    },
+  }
+
+  it('liest die Desktop-Variante', () => {
+    expect(findTikTokPost(page({ 'webapp.video-detail': { itemInfo: { itemStruct: item } } }))).toEqual({
+      description: 'Tikka Masala: 400 g Tofu #rezept',
+      author: 'Koch',
+      coverUrl: 'https://cdn.example/o.jpg',
+      subtitles: [{ url: 'https://cdn.example/de.vtt', language: 'deu-de' }],
+    })
+  })
+
+  it('liest die Mobil-Variante', () => {
+    expect(findTikTokPost(page({ 'webapp.reflow.video.detail': { itemInfo: { itemStruct: item } } }))?.description).toContain('Tofu')
+  })
+
+  it('versteht Foto-Beitraege', () => {
+    const photo = {
+      desc: 'Rezept',
+      contents: [{ desc: 'Rezept' }, { desc: '200 g Mehl' }],
+      imagePost: { images: [{ imageURL: { urlList: ['https://cdn.example/1.jpg'] } }] },
+    }
+    expect(findTikTokPost(page({ 'webapp.video-detail': { itemInfo: { itemStruct: photo } } }))).toMatchObject({
+      description: 'Rezept\n200 g Mehl',
+      coverUrl: 'https://cdn.example/1.jpg',
+      subtitles: [],
+    })
+  })
+
+  it('gibt null zurueck, wenn nichts Passendes da ist', () => {
+    expect(findTikTokPost('<html>nichts</html>')).toBeNull()
+    expect(findTikTokPost(page({ 'webapp.app-context': {} }))).toBeNull()
+    expect(findTikTokPost('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{kaputt</script>')).toBeNull()
+  })
+})
+
+describe('Untertitel', () => {
+  it('bevorzugt Deutsch, dann Englisch', () => {
+    const fr = { url: 'fr', language: 'fra-fr' }
+    const en = { url: 'en', language: 'eng-us' }
+    const de = { url: 'de', language: 'deu-de' }
+    expect(pickSubtitle([fr, en, de])).toBe('de')
+    expect(pickSubtitle([fr, en])).toBe('en')
+    expect(pickSubtitle([fr])).toBe('fr')
+    expect(pickSubtitle([])).toBeNull()
+  })
+
+  it('macht aus WebVTT reinen Text', () => {
+    const vtt = 'WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nNimm 400 g Tofu\n\n00:00:02.000 --> 00:00:03.000\nNimm 400 g Tofu\n\n00:00:03.000 --> 00:00:04.000\n<c>und Salz &amp; Pfeffer</c>\n'
+    expect(vttToText(vtt)).toBe('Nimm 400 g Tofu und Salz & Pfeffer')
   })
 })
 

@@ -169,6 +169,79 @@ export function findJsonLdRecipe(html: string): JsonLdRecipe | null {
 }
 
 // ---------------------------------------------------------------------------
+// TikTok
+// ---------------------------------------------------------------------------
+
+export interface TikTokPost {
+  description: string | null
+  author: string | null
+  coverUrl: string | null
+  subtitles: { url: string; language: string }[]
+}
+
+/**
+ * TikToks oEmbed liefert keine Beschreibung mehr und die Seite keine Meta-Tags.
+ * Die Daten stecken als JSON in der Seite, je nach Browser-Kennung unter einem anderen Schluessel.
+ */
+export function findTikTokPost(html: string): TikTokPost | null {
+  const match = /<script[^>]*id=["']__UNIVERSAL_DATA_FOR_REHYDRATION__["'][^>]*>([\s\S]*?)<\/script>/i.exec(html)
+  if (!match) return null
+  // deno-lint-ignore no-explicit-any
+  let scope: Record<string, any>
+  try {
+    scope = JSON.parse(match[1]).__DEFAULT_SCOPE__ ?? {}
+  } catch {
+    return null
+  }
+  const item = scope['webapp.video-detail']?.itemInfo?.itemStruct ?? scope['webapp.reflow.video.detail']?.itemInfo?.itemStruct
+  if (!item) return null
+
+  // Foto-Beitraege haben kein Video, aber Bilder und eigene Texte.
+  const photoTexts = Array.isArray(item.contents)
+    ? item.contents.map((entry: { desc?: unknown }) => (typeof entry?.desc === 'string' ? entry.desc : '')).filter(Boolean)
+    : []
+  const description = [typeof item.desc === 'string' ? item.desc : '', ...photoTexts]
+    .map((text) => text.trim())
+    .filter((text, index, all) => text && all.indexOf(text) === index)
+    .join('\n')
+
+  const photo = item.imagePost?.images?.[0]?.imageURL?.urlList?.[0]
+  const cover = item.video?.originCover || item.video?.cover || item.imagePost?.cover?.imageURL?.urlList?.[0] || photo
+  const subtitles = Array.isArray(item.video?.subtitleInfos)
+    ? item.video.subtitleInfos
+        .filter((entry: { Url?: unknown }) => typeof entry?.Url === 'string')
+        .map((entry: { Url: string; LanguageCodeName?: unknown }) => ({
+          url: entry.Url,
+          language: typeof entry.LanguageCodeName === 'string' ? entry.LanguageCodeName.toLowerCase() : '',
+        }))
+    : []
+
+  return {
+    description: description || null,
+    author: item.author?.nickname || item.author?.uniqueId || null,
+    coverUrl: typeof cover === 'string' ? cover : null,
+    subtitles,
+  }
+}
+
+/** Bevorzugt deutsche Untertitel, dann englische, sonst die ersten vorhandenen. */
+export function pickSubtitle(subtitles: TikTokPost['subtitles']): string | null {
+  const find = (prefix: string) => subtitles.find((entry) => entry.language.startsWith(prefix))
+  return (find('de') ?? find('en') ?? subtitles[0])?.url ?? null
+}
+
+/** Macht aus einer Untertitel-Datei (WebVTT) reinen Text. Wiederholte Zeilen kommen nur einmal vor. */
+export function vttToText(vtt: string): string {
+  const lines: string[] = []
+  for (const raw of vtt.split(/\r?\n/)) {
+    const line = decodeEntities(raw.replace(/<[^>]+>/g, '')).trim()
+    if (!line || /^(WEBVTT|NOTE|STYLE|REGION)\b/.test(line) || line.includes('-->') || /^\d+$/.test(line)) continue
+    if (lines[lines.length - 1] !== line) lines.push(line)
+  }
+  return lines.join(' ').slice(0, MAX_PAGE_TEXT)
+}
+
+// ---------------------------------------------------------------------------
 // Antwort der KI
 // ---------------------------------------------------------------------------
 

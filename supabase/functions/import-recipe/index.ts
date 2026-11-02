@@ -4,13 +4,17 @@ import Anthropic from 'npm:@anthropic-ai/sdk@1.3.0'
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.118.0'
 import {
   findJsonLdRecipe,
+  findTikTokPost,
   htmlToText,
   isPrivateIp,
   metaContent,
   type ModelRecipe,
   normalizeDraft,
   parseSafeUrl,
+  pickSubtitle,
   RECIPE_SCHEMA,
+  type TikTokPost,
+  vttToText,
 } from './extract.ts'
 
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-opus-5-5'
@@ -157,6 +161,23 @@ interface Source {
 }
 
 const isPinterest = (host: string) => /(^|\.)(pinterest\.[a-z.]+|pin\.it)$/.test(host)
+const isTikTok = (host: string) => /(^|\.)tiktok\.com$/.test(host)
+
+/** Automatische Untertitel enthalten oft die Zutaten, die nur im Video genannt werden. Fehlen sie, geht es ohne. */
+async function readTikTokSubtitles(post: TikTokPost | null): Promise<string | null> {
+  const url = post ? parseSafeUrl(pickSubtitle(post.subtitles) ?? '') : null
+  if (!url) return null
+  try {
+    const { response } = await safeFetch(url, 'text/vtt,text/plain,*/*')
+    if (!response.ok) {
+      await response.body?.cancel()
+      return null
+    }
+    return vttToText(new TextDecoder().decode(await readLimited(response, 512 * 1024))) || null
+  } catch {
+    return null
+  }
+}
 
 /** Ein Pin enthaelt selbst kein Rezept, nur einen Link zum Original. Fehler dort sind kein Grund abzubrechen. */
 async function readLinkedArticle(raw: string | null): Promise<{ text: string; imageUrl: string | null } | null> {
@@ -212,9 +233,16 @@ async function readSource(link: URL): Promise<Source> {
   const metaDescription = html ? metaContent(html, ['og:description', 'description', 'twitter:description']) : null
   const metaImage = html ? metaContent(html, ['og:image', 'og:image:secure_url', 'twitter:image']) : null
 
+  const onTikTok = isTikTok(finalUrl.hostname.toLowerCase())
+  const tiktok = html && onTikTok ? findTikTokPost(html) : null
+  const subtitles = await readTikTokSubtitles(tiktok)
+
   const parts: string[] = []
   if (oembedTitle) parts.push(`Beschreibung des Beitrags: ${oembedTitle}`)
   if (oembedAuthor) parts.push(`Von: ${oembedAuthor}`)
+  if (tiktok?.description) parts.push(`Beschreibung des Beitrags: ${tiktok.description}`)
+  if (tiktok?.author) parts.push(`Von: ${tiktok.author}`)
+  if (subtitles) parts.push(`Gesprochener Text im Video (automatisch erkannt, kann Fehler enthalten): ${subtitles}`)
   if (metaTitle) parts.push(`Seitentitel: ${metaTitle}`)
   if (metaDescription) parts.push(`Kurzbeschreibung: ${metaDescription}`)
 
@@ -230,6 +258,9 @@ async function readSource(link: URL): Promise<Source> {
 
   const text = parts.join('\n\n').trim()
   if (!text) {
+    if (onTikTok) {
+      throw new UserError('TikTok gibt zu diesem Link gerade keine Daten heraus. Ist das Video öffentlich und der Link vollständig? Sonst lege das Rezept von Hand an und füge danach einen Screenshot hinzu.')
+    }
     throw new UserError(
       blocked
         ? 'Diese Seite lässt sich nicht automatisch auslesen. Lege das Rezept am besten von Hand an.'
@@ -237,9 +268,9 @@ async function readSource(link: URL): Promise<Source> {
     )
   }
 
-  const rawImage = article?.imageUrl ?? recipe?.imageUrl ?? oembedImage ?? metaImage
+  const rawImage = article?.imageUrl ?? recipe?.imageUrl ?? tiktok?.coverUrl ?? oembedImage ?? metaImage
   return {
-    title: oembedTitle ?? recipe?.name ?? metaTitle,
+    title: oembedTitle ?? recipe?.name ?? metaTitle ?? tiktok?.description?.split('\n')[0] ?? null,
     text,
     imageUrl: rawImage ? parseSafeUrl(rawImage, finalUrl.href) : null,
   }
