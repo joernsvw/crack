@@ -7,8 +7,9 @@ synchronisieren sich in Echtzeit zwischen beiden Handys.
 Kategorien, Tags, Sterne-Bewertung mit Anpassungen und der Entdecken-Tab (Vorschläge, Reste-Modus, Geschmacksprofil) sind
 fertig.
 
+Zutaten lassen sich von der Rezeptseite auf die Einkaufsliste übernehmen, auch offline.
+
 - **Phase 2 (Rest):** Neues Rezept direkt aus einem Screenshot, Glücksrad
-- **Phase 4:** Zutaten aus einem Rezept auf die Einkaufsliste übernehmen
 
 ## Technik
 

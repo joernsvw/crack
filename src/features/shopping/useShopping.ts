@@ -29,6 +29,8 @@ export function useShopping(householdId: string, userId: string) {
   const [loading, setLoading] = useState(() => readCache(itemsKey) === null)
   const [error, setError] = useState<string | null>(null)
   const [online, setOnline] = useState(navigator.onLine)
+  // Der erste Abgleich mit dem Server ist durch, erfolgreich oder nicht. Bis dahin zeigt items den gespeicherten Stand.
+  const [settled, setSettled] = useState(false)
 
   const opsRef = useRef(ops)
   const flushing = useRef(false)
@@ -52,6 +54,7 @@ export function useShopping(householdId: string, userId: string) {
       .order('created_at')
     if (id !== fetchId.current) return
     setLoading(false)
+    setSettled(true)
     if (fetchError) {
       const retryable = isRetryableError({ message: fetchError.message, code: fetchError.code, status })
       if (!retryable) setError(fetchError.message)
@@ -71,7 +74,10 @@ export function useShopping(householdId: string, userId: string) {
         if (opError) {
           const retryable = isRetryableError({ message: opError.message, code: opError.code, status: result.status })
           // Offline oder Token abgelaufen: Die Aenderung bleibt gespeichert und geht spaeter raus.
-          if (retryable) return
+          if (retryable) {
+            setSettled(true)
+            return
+          }
           setError(`Eine Änderung konnte nicht gespeichert werden: ${opError.message}`)
         }
         storeOps(opsRef.current.slice(1))
@@ -165,5 +171,5 @@ export function useShopping(householdId: string, userId: string) {
     [enqueue, householdId, userId],
   )
 
-  return { items, loading, error, online, pending: ops.length, clearError: () => setError(null), ...actions }
+  return { items, loading, settled, error, online, pending: ops.length, clearError: () => setError(null), ...actions }
 }

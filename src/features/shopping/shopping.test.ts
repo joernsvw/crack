@@ -41,6 +41,7 @@ describe('suggestCategory', () => {
     ['Kartoffelchips', 'Trockenwaren'],
     ['Kartoffeln', 'Obst & Gemüse'],
     ['Reibekäse', 'Kühlregal'],
+    ['Halloumi', 'Kühlregal'],
     ['Milch', 'Kühlregal'],
     ['Vollkornbrot', 'Brot'],
     ['Reis', 'Trockenwaren'],

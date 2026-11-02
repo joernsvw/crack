@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, CheckCircle2, Clock, ExternalLink, Pencil, Trash2, Undo2, Users } from 'lucide-react'
+import { BookOpen, CheckCircle2, Clock, ExternalLink, Pencil, ShoppingCart, Trash2, Undo2, Users } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorBox, PageHeader, Spinner } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
@@ -7,6 +7,7 @@ import { useHousehold } from '../../context/HouseholdContext'
 import { formatRelativeDate, isSafeUrl } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Modification, Rating, Recipe } from '../../lib/types'
+import { AddToShoppingSheet } from './AddToShoppingSheet'
 import { averageRating, BUCKET, useCategories, useImageUrl, useRecipes, useTags } from './data'
 import { RecipeAiEdit } from './RecipeAiEdit'
 import { StarsDisplay, StarsInput } from './Stars'
@@ -35,6 +36,9 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
   const { data: categories } = useCategories(householdId)
   const { data: tags } = useTags(householdId)
   const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
+  const [shoppingOpen, setShoppingOpen] = useState(false)
+  const [addedCount, setAddedCount] = useState<number | null>(null)
 
   const category = categories?.find((candidate) => candidate.id === recipe.category_id)
   const recipeTags = (tags ?? []).filter((tag) => recipe.recipe_tags.some((link) => link.tag_id === tag.id))
@@ -159,14 +163,45 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
               .
             </p>
           ) : (
-            <ul className="card divide-y divide-line">
-              {recipe.recipe_ingredients.map((ingredient) => (
-                <li key={ingredient.id} className="flex justify-between gap-3 px-4 py-2.5">
-                  <span>{ingredient.name}</span>
-                  <span className="shrink-0 text-muted">{[ingredient.quantity, ingredient.unit].filter(Boolean).join(' ')}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="card divide-y divide-line">
+                {recipe.recipe_ingredients.map((ingredient) => (
+                  <li key={ingredient.id} className="flex justify-between gap-3 px-4 py-2.5">
+                    <span>{ingredient.name}</span>
+                    <span className="shrink-0 text-muted">{[ingredient.quantity, ingredient.unit].filter(Boolean).join(' ')}</span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="btn btn-soft mt-2 w-full"
+                onClick={() => {
+                  setAddedCount(null)
+                  setShoppingOpen(true)
+                }}
+              >
+                <ShoppingCart size={18} aria-hidden /> Zutaten auf die Einkaufsliste
+              </button>
+              {addedCount !== null && (
+                <p className="fade-in mt-2 rounded-xl bg-primary-soft p-3 text-sm text-primary-soft-ink" role="status">
+                  {addedCount === 1 ? '1 Zutat' : `${addedCount} Zutaten`} auf der Liste.{' '}
+                  <Link to="/einkauf" className="font-semibold underline">
+                    Zur Einkaufsliste
+                  </Link>
+                </p>
+              )}
+              {shoppingOpen && (
+                <AddToShoppingSheet
+                  householdId={householdId}
+                  userId={user!.id}
+                  ingredients={recipe.recipe_ingredients}
+                  onClose={() => setShoppingOpen(false)}
+                  onAdded={(count) => {
+                    setShoppingOpen(false)
+                    setAddedCount(count)
+                  }}
+                />
+              )}
+            </>
           )}
         </section>
 

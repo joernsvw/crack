@@ -19,7 +19,7 @@ const KEYWORDS: Record<string, string[]> = {
   ],
   Kühlregal: [
     'milch', 'butter', 'sahne', 'schmand', 'crème fraîche', 'creme fraiche', 'quark', 'joghurt', 'käse', 'kaese',
-    'mozzarella', 'feta', 'parmesan', 'gouda', 'frischkäse', 'skyr', 'hafermilch', 'margarine', 'hefe', 'wurst',
+    'mozzarella', 'feta', 'halloumi', 'paneer', 'parmesan', 'gouda', 'frischkäse', 'skyr', 'hafermilch', 'margarine', 'hefe', 'wurst',
     'schinken', 'salami', 'speck', 'hack', 'hackfleisch', 'hähnchen', 'huhn', 'pute', 'rind', 'schwein', 'steak',
     'lachs', 'fisch', 'tofu', 'gnocchi', 'blätterteig', 'pizzateig',
   ],
