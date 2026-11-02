@@ -10,7 +10,8 @@ fertig.
 Zutaten lassen sich von der Rezeptseite auf die Einkaufsliste übernehmen, auch offline.
 
 Das Glücksrad wählt gewichtet nach Bewertung aus, lässt sich nach Kategorie filtern, und Rezepte lassen sich ausblenden.
-Neue Rezepte entstehen auch direkt aus bis zu 4 Screenshots.
+Neue Rezepte entstehen auch direkt aus bis zu 4 Screenshots. Bei Einheiten wie cup, oz oder lb bleibt die Originalangabe
+stehen, daneben steht die Umrechnung in Gramm oder Milliliter. Cups sind eine Schätzung der KI und lassen sich prüfen.
 
 ## Technik
 

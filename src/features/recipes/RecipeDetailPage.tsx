@@ -168,7 +168,10 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
                 {recipe.recipe_ingredients.map((ingredient) => (
                   <li key={ingredient.id} className="flex justify-between gap-3 px-4 py-2.5">
                     <span>{ingredient.name}</span>
-                    <span className="shrink-0 text-muted">{[ingredient.quantity, ingredient.unit].filter(Boolean).join(' ')}</span>
+                    <span className="shrink-0 text-right text-muted">
+                      {[ingredient.quantity, ingredient.unit].filter(Boolean).join(' ')}
+                      {ingredient.metric && <span className="block text-sm font-medium text-primary-soft-ink">{ingredient.metric}</span>}
+                    </span>
                   </li>
                 ))}
               </ul>

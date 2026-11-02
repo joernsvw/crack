@@ -14,9 +14,10 @@ interface IngredientRow {
   quantity: string
   unit: string
   name: string
+  metric: string
 }
 
-const newRow = (): IngredientRow => ({ key: crypto.randomUUID(), quantity: '', unit: '', name: '' })
+const newRow = (): IngredientRow => ({ key: crypto.randomUUID(), quantity: '', unit: '', name: '', metric: '' })
 
 export function RecipeFormPage() {
   const { id } = useParams()
@@ -61,6 +62,7 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
           quantity: item.quantity ?? '',
           unit: item.unit ?? '',
           name: item.name,
+          metric: item.metric ?? '',
         }))
       : [newRow()],
   )
@@ -135,7 +137,12 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
           image_path: imagePath,
           ingredients: ingredients
             .filter((row) => row.name.trim())
-            .map((row) => ({ name: row.name.trim(), quantity: row.quantity.trim() || null, unit: row.unit.trim() || null })),
+            .map((row) => ({
+              name: row.name.trim(),
+              quantity: row.quantity.trim() || null,
+              unit: row.unit.trim() || null,
+              metric: row.metric.trim() || null,
+            })),
           tagNames: tagInput.trim() ? [...tagNames, tagInput.trim()] : tagNames,
         },
         existing,
@@ -239,18 +246,33 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
           <span className="label">Zutaten</span>
           <div className="space-y-2">
             {ingredients.map((row) => (
-              <div key={row.key} className="flex items-center gap-2">
-                <input className="input !w-16 shrink-0 !px-2" placeholder="Menge" aria-label="Menge" value={row.quantity} onChange={(event) => updateIngredient(row.key, { quantity: event.target.value })} />
-                <input className="input !w-16 shrink-0 !px-2" placeholder="Einh." aria-label="Einheit" value={row.unit} onChange={(event) => updateIngredient(row.key, { unit: event.target.value })} />
-                <input className="input min-w-0" placeholder="Zutat" aria-label="Zutat" value={row.name} onChange={(event) => updateIngredient(row.key, { name: event.target.value })} />
-                <button
-                  type="button"
-                  className="icon-btn !w-8"
-                  aria-label="Zutat entfernen"
-                  onClick={() => setIngredients((rows) => (rows.length > 1 ? rows.filter((other) => other.key !== row.key) : [newRow()]))}
-                >
-                  <Trash2 size={18} />
-                </button>
+              <div key={row.key}>
+                <div className="flex items-center gap-2">
+                  <input className="input !w-16 shrink-0 !px-2" placeholder="Menge" aria-label="Menge" value={row.quantity} onChange={(event) => updateIngredient(row.key, { quantity: event.target.value })} />
+                  <input className="input !w-16 shrink-0 !px-2" placeholder="Einh." aria-label="Einheit" value={row.unit} onChange={(event) => updateIngredient(row.key, { unit: event.target.value })} />
+                  <input className="input min-w-0" placeholder="Zutat" aria-label="Zutat" value={row.name} onChange={(event) => updateIngredient(row.key, { name: event.target.value })} />
+                  <button
+                    type="button"
+                    className="icon-btn !w-8"
+                    aria-label="Zutat entfernen"
+                    onClick={() => setIngredients((rows) => (rows.length > 1 ? rows.filter((other) => other.key !== row.key) : [newRow()]))}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+                {/* Nur bei Umrechnungen sichtbar, damit die Zeile sonst schlank bleibt. */}
+                {row.metric && (
+                  <label className="mt-1 flex items-center gap-2 pr-10 text-sm text-muted">
+                    Umgerechnet
+                    <input
+                      className="input min-w-0 flex-1"
+                      aria-label={`Umrechnung für ${row.name || 'diese Zutat'}`}
+                      maxLength={40}
+                      value={row.metric}
+                      onChange={(event) => updateIngredient(row.key, { metric: event.target.value })}
+                    />
+                  </label>
+                )}
               </div>
             ))}
           </div>

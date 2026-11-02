@@ -42,6 +42,7 @@ export interface Ingredient {
   name: string
   quantity: string | null
   unit: string | null
+  metric?: string | null
   sort_order: number
 }
 

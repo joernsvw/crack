@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decodeEntities,
+  exactMetric,
   findJsonLdRecipe,
   findTikTokPost,
   firstUsable,
@@ -8,6 +9,7 @@ import {
   isPrivateIp,
   metaContent,
   normalizeDraft,
+  parseAmount,
   parseSafeUrl,
   pickSubtitle,
   vttToText,
@@ -149,6 +151,41 @@ describe('findTikTokPost', () => {
   })
 })
 
+describe('parseAmount', () => {
+  it.each([
+    ['8', 8],
+    ['1,5', 1.5],
+    ['1.5', 1.5],
+    ['1/2', 0.5],
+    ['1 1/2', 1.5],
+    ['½', 0.5],
+    ['1½', 1.5],
+    ['1 ½', 1.5],
+  ])('%s ist %d', (text, value) => expect(parseAmount(text)).toBe(value))
+
+  it.each(['1-2', 'etwas', '', '1/0'])('„%s“ ist keine eindeutige Menge', (text) => expect(parseAmount(text)).toBeNull())
+  it('kommt mit null zurecht', () => expect(parseAmount(null)).toBeNull())
+})
+
+describe('exactMetric', () => {
+  it.each([
+    ['8', 'oz', '≈ 225 g'],
+    ['1', 'lb', '≈ 455 g'],
+    ['2', 'lbs', '≈ 905 g'],
+    ['1/2', 'pound', '≈ 225 g'],
+    ['4', 'ounces', '≈ 115 g'],
+    ['1', 'oz', '≈ 30 g'],
+    ['8', 'fl oz', '≈ 235 ml'],
+    ['0.5', 'oz', '≈ 14 g'],
+  ])('%s %s wird %s', (quantity, unit, expected) => expect(exactMetric(quantity, unit)).toBe(expected))
+
+  it('rechnet nichts ohne festen Faktor oder eindeutige Menge', () => {
+    expect(exactMetric('1', 'cup')).toBeNull()
+    expect(exactMetric('1-2', 'oz')).toBeNull()
+    expect(exactMetric('1', null)).toBeNull()
+  })
+})
+
 describe('firstUsable', () => {
   it('hoert beim ersten brauchbaren Ergebnis auf', async () => {
     const calls: number[] = []
@@ -222,8 +259,36 @@ describe('normalizeDraft', () => {
       total_minutes: 20,
       category_id: 'c1',
       tags: ['schnell', 'veggie'],
-      ingredients: [{ name: 'Nudeln', quantity: '200', unit: null }],
+      ingredients: [{ name: 'Nudeln', quantity: '200', unit: null, metric: null }],
       steps: ['Kochen.'],
+    })
+  })
+
+  describe('Umrechnung', () => {
+    const one = (item: { quantity: string | null; unit: string | null; metric?: string | null }) =>
+      normalizeDraft({ ...base, ingredients: [{ name: 'Mehl', ...item }] }, categories, 'X').ingredients[0]
+
+    it('behaelt bei Cups die Originalangabe und die Schaetzung der KI', () => {
+      expect(one({ quantity: '1', unit: 'cup', metric: '120 g' })).toEqual({ name: 'Mehl', quantity: '1', unit: 'cup', metric: '≈ 120 g' })
+    })
+
+    it('verdoppelt das Ungefaehr-Zeichen nicht', () => {
+      expect(one({ quantity: '1', unit: 'cup', metric: '≈ 120 g' }).metric).toBe('≈ 120 g')
+      expect(one({ quantity: '1', unit: 'cup', metric: 'ca. 120 g' }).metric).toBe('≈ 120 g')
+    })
+
+    it('rechnet Gewichte selbst, auch gegen die Angabe der KI', () => {
+      expect(one({ quantity: '8', unit: 'oz', metric: '999 g' }).metric).toBe('≈ 225 g')
+    })
+
+    it('rechnet Metrisches nicht um', () => {
+      expect(one({ quantity: '200', unit: 'g', metric: '≈ 200 g' }).metric).toBeNull()
+      expect(one({ quantity: '1', unit: 'L', metric: '1000 ml' }).metric).toBeNull()
+    })
+
+    it('laesst leere Angaben leer', () => {
+      expect(one({ quantity: '2', unit: 'EL', metric: null }).metric).toBeNull()
+      expect(one({ quantity: '1', unit: 'Prise' }).metric).toBeNull()
     })
   })
 

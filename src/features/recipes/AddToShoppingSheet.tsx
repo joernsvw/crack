@@ -67,7 +67,12 @@ function Selection({
     shopping.add(
       rows
         .filter((row) => row.selected)
-        .map(({ ingredient }) => ({ name: ingredient.name, quantity: ingredient.quantity, unit: ingredient.unit })),
+        // Im Supermarkt hilft "≈ 120 g" mehr als "1 cup".
+        .map(({ ingredient }) =>
+          ingredient.metric
+            ? { name: ingredient.name, quantity: ingredient.metric, unit: null }
+            : { name: ingredient.name, quantity: ingredient.quantity, unit: ingredient.unit },
+        ),
     )
     onAdded(count)
   }
@@ -95,7 +100,10 @@ function Selection({
                 <span className="block break-words">{ingredient.name}</span>
                 {hint && <span className="block text-xs text-muted">{HINT_TEXT[hint]}</span>}
               </span>
-              <span className="shrink-0 text-sm text-muted">{[ingredient.quantity, ingredient.unit].filter(Boolean).join(' ')}</span>
+              <span className="shrink-0 text-right text-sm text-muted">
+                {[ingredient.quantity, ingredient.unit].filter(Boolean).join(' ')}
+                {ingredient.metric && <span className="block">{ingredient.metric}</span>}
+              </span>
             </button>
           </li>
         ))}

@@ -74,7 +74,7 @@ export interface RecipeDraft {
   category_id: string | null
   source_url: string | null
   image_path: string | null
-  ingredients: { name: string; quantity: string | null; unit: string | null }[]
+  ingredients: { name: string; quantity: string | null; unit: string | null; metric?: string | null }[]
   tagNames: string[]
 }
 

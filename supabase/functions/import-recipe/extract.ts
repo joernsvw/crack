@@ -276,11 +276,12 @@ export const RECIPE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'quantity', 'unit'],
+        required: ['name', 'quantity', 'unit', 'metric'],
         properties: {
           name: { type: 'string' },
           quantity: { type: ['string', 'null'] },
           unit: { type: ['string', 'null'] },
+          metric: { type: ['string', 'null'] },
         },
       },
     },
@@ -295,7 +296,7 @@ export interface ModelRecipe {
   total_minutes: number | null
   category: string | null
   tags: string[]
-  ingredients: { name: string; quantity: string | null; unit: string | null }[]
+  ingredients: { name: string; quantity: string | null; unit: string | null; metric?: string | null }[]
   steps: string[]
 }
 
@@ -304,6 +305,44 @@ export interface RecipeDraft extends Omit<ModelRecipe, 'category'> {
 }
 
 const blankToNull = (value: string | null | undefined) => value?.trim() || null
+
+const FRACTIONS: Record<string, number> = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 }
+
+/** Versteht "8", "1,5", "1/2", "1 1/2", "½" und "1½". Spannen wie "1-2" sind keine eindeutige Menge. */
+export function parseAmount(raw: string | null | undefined): number | null {
+  const text = raw?.trim()
+  if (!text) return null
+  const glyph = /^(\d+)?\s*([½¼¾⅓⅔⅛])$/.exec(text)
+  if (glyph) return Number(glyph[1] ?? 0) + FRACTIONS[glyph[2]]
+  const mixed = /^(?:(\d+)\s+)?(\d+)\/(\d+)$/.exec(text)
+  if (mixed) return Number(mixed[3]) ? Number(mixed[1] ?? 0) + Number(mixed[2]) / Number(mixed[3]) : null
+  return /^\d+(?:[.,]\d+)?$/.test(text) ? Number(text.replace(',', '.')) : null
+}
+
+const EXACT_UNITS: { pattern: RegExp; factor: number; target: string }[] = [
+  { pattern: /^(fl\.?\s*oz\.?|fluid\s+ounces?)$/i, factor: 29.57, target: 'ml' },
+  { pattern: /^(oz\.?|ounces?|unzen?)$/i, factor: 28.35, target: 'g' },
+  { pattern: /^(lbs?\.?|pounds?)$/i, factor: 453.59, target: 'g' },
+]
+
+const METRIC_UNIT = /^(g|gr|gramm|kg|kilo|kilogramm|mg|ml|milliliter|cl|dl|l|liter)\.?$/i
+
+/** Gewichte haben einen festen Umrechnungsfaktor. Das rechnet der Code selbst, statt es der KI zu ueberlassen. */
+export function exactMetric(quantity: string | null, unit: string | null): string | null {
+  const known = EXACT_UNITS.find((entry) => entry.pattern.test(unit?.trim() ?? ''))
+  const amount = parseAmount(quantity)
+  if (!known || amount === null) return null
+  const value = amount * known.factor
+  return `≈ ${value < 20 ? Math.round(value) : Math.round(value / 5) * 5} ${known.target}`
+}
+
+function cleanMetric(item: { quantity: string | null; unit: string | null; metric?: string | null }): string | null {
+  if (METRIC_UNIT.test(item.unit?.trim() ?? '')) return null
+  const exact = exactMetric(item.quantity, item.unit)
+  if (exact) return exact
+  const text = blankToNull(item.metric)?.replace(/^(≈|~|ca\.?|etwa)\s*/i, '').slice(0, 36)
+  return text ? `≈ ${text}` : null
+}
 const positive = (value: number | null | undefined) =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null
 
@@ -335,6 +374,7 @@ export function normalizeDraft(
         name: item.name?.trim().slice(0, 200) ?? '',
         quantity: blankToNull(item.quantity),
         unit: blankToNull(item.unit),
+        metric: cleanMetric(item),
       }))
       .filter((item) => item.name),
     steps: recipe.steps.map((step) => step.trim()).filter(Boolean),
