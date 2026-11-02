@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useHousehold } from '../../context/HouseholdContext'
 import { formatRelativeDate, isSafeUrl } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
-import type { Recipe } from '../../lib/types'
+import type { Modification, Rating, Recipe } from '../../lib/types'
 import { averageRating, BUCKET, useCategories, useImageUrl, useRecipes, useTags } from './data'
 import { RecipeAiEdit } from './RecipeAiEdit'
 import { StarsDisplay, StarsInput } from './Stars'
@@ -190,6 +190,80 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
   )
 }
 
+const MODIFICATION_LABELS: Record<Modification['type'], string> = {
+  omitted: 'weggelassen',
+  replaced: 'ausgetauscht',
+  more: 'mehr davon',
+}
+
+/** Was ihr beim Kochen geaendert habt. Fliesst automatisch ins Geschmacksprofil unter Entdecken ein. */
+function ModificationEditor({
+  recipe,
+  rating,
+  run,
+}: {
+  recipe: Recipe
+  rating: Rating
+  run: (action: PromiseLike<{ error: { message: string } | null }>) => Promise<boolean>
+}) {
+  const [items, setItems] = useState<Modification[]>(rating.modifications ?? [])
+
+  const save = (next: Modification[]) => {
+    setItems(next)
+    void run(supabase.from('recipe_ratings').update({ modifications: next }).eq('id', rating.id))
+  }
+
+  const setType = (ingredient: string, type: Modification['type'] | '') => {
+    const others = items.filter((item) => item.ingredient !== ingredient)
+    save(type ? [...others, { ingredient, type, replacement: type === 'replaced' ? '' : null }] : others)
+  }
+
+  const setReplacement = (ingredient: string, replacement: string) =>
+    setItems(items.map((item) => (item.ingredient === ingredient ? { ...item, replacement } : item)))
+
+  return (
+    <details className="mt-3 border-t border-line pt-2" open={items.length > 0}>
+      <summary className="flex min-h-11 cursor-pointer items-center font-medium">Beim Kochen etwas geändert?</summary>
+      <ul className="space-y-2">
+        {recipe.recipe_ingredients.map((ingredient) => {
+          const current = items.find((item) => item.ingredient === ingredient.name)
+          return (
+            <li key={ingredient.id ?? ingredient.name}>
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 break-words text-sm">{ingredient.name}</span>
+                <select
+                  className="input !w-36 shrink-0 !text-sm"
+                  aria-label={`Änderung bei ${ingredient.name}`}
+                  value={current?.type ?? ''}
+                  onChange={(event) => setType(ingredient.name, event.target.value as Modification['type'] | '')}
+                >
+                  <option value="">wie im Rezept</option>
+                  {Object.entries(MODIFICATION_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {current?.type === 'replaced' && (
+                <input
+                  className="input mt-1"
+                  placeholder="Ausgetauscht durch …"
+                  aria-label={`${ingredient.name} ausgetauscht durch`}
+                  value={current.replacement ?? ''}
+                  onChange={(event) => setReplacement(ingredient.name, event.target.value)}
+                  onBlur={() => save(items)}
+                />
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-muted">Daraus lernt der Tab Entdecken, was ihr mögt und was nicht.</p>
+    </details>
+  )
+}
+
 function RatingSection({
   recipe,
   run,
@@ -245,6 +319,7 @@ function RatingSection({
           onBlur={saveNote}
         />
       )}
+      {own && recipe.recipe_ingredients.length > 0 && <ModificationEditor recipe={recipe} rating={own} run={run} />}
       {others.map((rating) => (
         <div key={rating.id} className="mt-3 border-t border-line pt-3 text-sm">
           <div className="flex items-center justify-between">

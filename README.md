@@ -3,11 +3,11 @@
 Gemeinsame Koch- und Einkaufs-App für zwei Personen. Sie läuft als Web-App (PWA) auf iPhone und Android, alle Daten
 synchronisieren sich in Echtzeit zwischen beiden Handys.
 
-**Aktueller Stand: Phase 1 und Rezept-Import per Link.** Einkaufsliste (auch offline), Notizen, Rezepte von Hand oder
-per Link anlegen, Kategorien, Tags und Sterne-Bewertung sind fertig.
+**Aktueller Stand:** Einkaufsliste (auch offline), Notizen, Rezepte von Hand oder per Link anlegen, Anpassen mit KI,
+Kategorien, Tags, Sterne-Bewertung mit Anpassungen und der Entdecken-Tab (Vorschläge, Reste-Modus, Geschmacksprofil) sind
+fertig.
 
-- **Phase 2 (Rest):** Rezept-Import per Screenshot, Anpassungen bei Bewertungen, Glücksrad
-- **Phase 3:** Entdecken-Tab mit Geschmacksprofil, KI-Vorschlägen und Reste-Modus
+- **Phase 2 (Rest):** Neues Rezept direkt aus einem Screenshot, Glücksrad
 - **Phase 4:** Zutaten aus einem Rezept auf die Einkaufsliste übernehmen
 
 ## Technik

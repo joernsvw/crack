@@ -40,13 +40,17 @@ export async function proposeRecipeEdit(recipeId: string, instruction: string, f
 }
 
 async function callRecipeFunction(body: Record<string, unknown>): Promise<ImportedDraft> {
+  return (await invokeAiFunction<{ draft: ImportedDraft }>(body)).draft
+}
+
+export async function invokeAiFunction<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('import-recipe', { body })
   if (error) {
     if (error instanceof FunctionsHttpError) {
       const body = await (error.context as Response).json().catch(() => null)
-      throw new Error(body?.error ?? 'Der Import ist fehlgeschlagen. Bitte versuche es noch einmal.')
+      throw new Error(body?.error ?? 'Das hat nicht geklappt. Bitte versuche es noch einmal.')
     }
-    throw new Error(navigator.onLine ? 'Der Import ist fehlgeschlagen. Bitte versuche es noch einmal.' : 'Dafür brauchst du eine Internetverbindung.')
+    throw new Error(navigator.onLine ? 'Das hat nicht geklappt. Bitte versuche es noch einmal.' : 'Dafür brauchst du eine Internetverbindung.')
   }
-  return data.draft as ImportedDraft
+  return data as T
 }

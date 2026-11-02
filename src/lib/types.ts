@@ -45,6 +45,12 @@ export interface Ingredient {
   sort_order: number
 }
 
+export interface Modification {
+  ingredient: string
+  type: 'omitted' | 'replaced' | 'more'
+  replacement?: string | null
+}
+
 export interface Rating {
   id: string
   household_id: string
@@ -52,6 +58,23 @@ export interface Rating {
   user_id: string
   stars: number
   note: string | null
+  modifications?: Modification[]
+}
+
+export interface TasteProfile {
+  household_id: string
+  likes: string[]
+  avoids: string[]
+  diet: string | null
+  dismissed_hints: string[]
+}
+
+export interface Suggestion {
+  name: string
+  description: string
+  why: string
+  main_ingredients: string[]
+  adaptation: string | null
 }
 
 export interface Recipe {

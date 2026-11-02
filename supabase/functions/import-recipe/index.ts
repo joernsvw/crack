@@ -16,6 +16,14 @@ import {
   type TikTokPost,
   vttToText,
 } from './extract.ts'
+import {
+  cleanSuggestions,
+  LEFTOVERS_RULE,
+  parseLeftovers,
+  SUGGEST_PROMPT,
+  SUGGESTION_SCHEMA,
+  type Suggestion,
+} from './suggest.ts'
 
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-opus-5-5'
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'https://joernsvw.github.io,http://localhost:5173').split(',')
@@ -320,7 +328,12 @@ function imageBlock(type: string, base64: string): Anthropic.Beta.BetaContentBlo
 const contextLine = (categories: string[], tags: string[]) =>
   `Kategorien: ${categories.join(', ') || 'keine'}\nVorhandene Tags: ${tags.join(', ') || 'keine'}`
 
-async function askClaude(system: string, content: Anthropic.Beta.BetaContentBlockParam[]): Promise<ModelRecipe> {
+async function askClaude<T = ModelRecipe>(
+  system: string,
+  content: Anthropic.Beta.BetaContentBlockParam[],
+  schema: unknown = RECIPE_SCHEMA,
+  effort: 'low' | 'medium' = 'low',
+): Promise<T> {
   const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') })
   const response = await client.beta.messages.create({
     model: MODEL,
@@ -329,8 +342,8 @@ async function askClaude(system: string, content: Anthropic.Beta.BetaContentBloc
     fallbacks: 'default',
     system,
     output_config: {
-      effort: 'low',
-      format: { type: 'json_schema', schema: RECIPE_SCHEMA as unknown as Record<string, unknown> },
+      effort,
+      format: { type: 'json_schema', schema: schema as Record<string, unknown> },
     },
     messages: [{ role: 'user', content }],
   })
@@ -339,7 +352,7 @@ async function askClaude(system: string, content: Anthropic.Beta.BetaContentBloc
   if (response.stop_reason === 'max_tokens') throw new UserError('Das Rezept war zu lang für die KI.')
   const block = response.content.find((entry) => entry.type === 'text')
   if (!block || block.type !== 'text') throw new Error('Keine Textantwort der KI')
-  return JSON.parse(block.text) as ModelRecipe
+  return JSON.parse(block.text) as T
 }
 
 function describeAiError(error: unknown): UserError | null {
@@ -452,6 +465,74 @@ async function proposeEdit(
   return { ...draft, source_url: recipe.source_url, image_path: recipe.image_path }
 }
 
+/** Neue Gerichte aus Bewertungen und Profil. Nur der normale Vorschlag wird gemerkt, Reste sind jedes Mal anders. */
+async function proposeSuggestions(
+  supabase: SupabaseClient,
+  householdId: string,
+  action: 'suggest' | 'leftovers',
+  rawLeftovers: unknown,
+): Promise<Suggestion[]> {
+  const leftovers = parseLeftovers(rawLeftovers)
+  if (action === 'leftovers' && leftovers.length === 0) throw new UserError('Gib mindestens eine Zutat an.', 400)
+
+  const [{ data: profile }, { data: recipes }, { data: feedback }] = await Promise.all([
+    supabase.from('taste_profile').select('likes, avoids, diet').eq('household_id', householdId).maybeSingle(),
+    supabase
+      .from('recipes')
+      .select('title, categories(name), recipe_ratings(stars), recipe_tags(tags(name))')
+      .eq('household_id', householdId),
+    supabase.from('suggestion_feedback').select('name, verdict').eq('household_id', householdId).limit(200),
+  ])
+
+  const avoids: string[] = profile?.avoids ?? []
+  const favorites = (recipes ?? [])
+    .map((recipe) => {
+      const stars = recipe.recipe_ratings.map((rating: { stars: number }) => rating.stars)
+      const average = stars.length ? stars.reduce((sum: number, value: number) => sum + value, 0) / stars.length : 0
+      const category = (recipe.categories as unknown as { name: string } | null)?.name
+      const tags = (recipe.recipe_tags as unknown as { tags: { name: string } | null }[]).flatMap((link) => link.tags?.name ?? [])
+      return { title: recipe.title, average, category, tags }
+    })
+    .filter((recipe) => recipe.average >= 4)
+    .sort((a, b) => b.average - a.average)
+    .slice(0, 30)
+  const known = (recipes ?? []).map((recipe) => recipe.title)
+  const dismissed = (feedback ?? []).filter((entry) => entry.verdict === 'dismissed').map((entry) => entry.name)
+  const excluded = [...known, ...(feedback ?? []).map((entry) => entry.name)]
+
+  const { data: allowed, error: limitError } = await supabase.rpc('consume_ai_call')
+  if (limitError) throw limitError
+  if (!allowed) throw new UserError('Das Tageslimit für KI-Aufrufe ist erreicht. Morgen geht es weiter.', 429)
+
+  const limit = action === 'leftovers' ? 4 : 6
+  const result = await askClaude<{ suggestions: Suggestion[] }>(
+    action === 'leftovers' ? SUGGEST_PROMPT + LEFTOVERS_RULE : SUGGEST_PROMPT,
+    [{
+      type: 'text',
+      text: `Schlage ${limit + 2} Gerichte vor.\n\n<daten>\n${JSON.stringify({
+        'Mögen wir gern': profile?.likes ?? [],
+        'Lieber vermeiden': avoids,
+        'Ernährungsweise': profile?.diet ?? null,
+        'Gut bewertet': favorites.map(({ average: _average, ...rest }) => rest),
+        'Schon vorhanden': known.slice(0, 100),
+        'Abgelehnt': dismissed.slice(0, 100),
+        ...(action === 'leftovers' ? { 'Vorhandene Zutaten': leftovers } : {}),
+      })}\n</daten>`,
+    }],
+    SUGGESTION_SCHEMA,
+    'medium',
+  )
+  const suggestions = cleanSuggestions(result.suggestions ?? [], { avoids, excluded, limit })
+
+  if (action === 'suggest') {
+    const { error } = await supabase
+      .from('suggestion_cache')
+      .upsert({ household_id: householdId, suggestions, created_at: new Date().toISOString() })
+    if (error) console.error('Vorschläge konnten nicht gespeichert werden:', error.message)
+  }
+  return suggestions
+}
+
 Deno.serve(async (request) => {
   const headers = corsHeaders(request.headers.get('origin'))
   const reply = (status: number, body: unknown) =>
@@ -483,6 +564,11 @@ Deno.serve(async (request) => {
 
     if (!Deno.env.get('ANTHROPIC_API_KEY')) {
       return reply(503, { error: 'Der KI-Schlüssel ist noch nicht eingerichtet.' })
+    }
+
+    if (body?.action === 'suggest' || body?.action === 'leftovers') {
+      const suggestions = await proposeSuggestions(supabase, member.household_id, body.action, body.leftovers)
+      return reply(200, { suggestions })
     }
 
     if (body?.recipe_id !== undefined) {
