@@ -88,6 +88,7 @@ export interface Recipe {
   category_id: string | null
   source_url: string | null
   image_path: string | null
+  wheel_hidden?: boolean
   created_at: string
   recipe_ingredients: Ingredient[]
   recipe_tags: { tag_id: string }[]

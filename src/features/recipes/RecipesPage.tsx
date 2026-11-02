@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, Clock, ImageOff, Link2, Plus, Search, SlidersHorizontal } from 'lucide-react'
+import { BookOpen, Clock, Dices, ImageOff, Link2, Plus, Search, SlidersHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { EmptyState, ErrorBox, PageHeader, Spinner } from '../../components/ui'
 import { useHousehold } from '../../context/HouseholdContext'
@@ -32,9 +32,14 @@ export function RecipesPage() {
         }
       />
       <main className="mx-auto max-w-2xl px-4">
-        <Link to="/rezepte/import" className="btn btn-primary mb-3 w-full">
-          <Link2 size={20} aria-hidden /> Rezept per Link hinzufügen
-        </Link>
+        <div className="mb-3 grid gap-2">
+          <Link to="/rezepte/rad" className="btn btn-primary w-full">
+            <Dices size={20} aria-hidden /> Was essen wir heute?
+          </Link>
+          <Link to="/rezepte/import" className="btn btn-soft w-full">
+            <Link2 size={20} aria-hidden /> Rezept per Link hinzufügen
+          </Link>
+        </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-3.5 text-muted" aria-hidden />
