@@ -1,26 +1,16 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { ImagePlus, Loader2, Sparkles, X } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ErrorBox } from '../../components/ui'
 import { proposeRecipeEdit } from './importLink'
-
-const MAX_FILES = 4
+import { ScreenshotButton, ScreenshotChips } from './ScreenshotPicker'
 
 export function RecipeAiEdit({ recipeId }: { recipeId: string }) {
   const navigate = useNavigate()
-  const fileInput = useRef<HTMLInputElement>(null)
   const [instruction, setInstruction] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const addFiles = (selected: FileList | null) => {
-    // Vor dem Leeren kopieren: Die FileList ist live und waere danach leer.
-    const added = Array.from(selected ?? [])
-    setFiles((current) => [...current, ...added].slice(0, MAX_FILES))
-    // Sonst loest dieselbe Datei beim zweiten Auswaehlen kein Ereignis aus.
-    if (fileInput.current) fileInput.current.value = ''
-  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -51,38 +41,9 @@ export function RecipeAiEdit({ recipeId }: { recipeId: string }) {
           value={instruction}
           onChange={(event) => setInstruction(event.target.value)}
         />
-
-        {files.length > 0 && (
-          <ul className="flex flex-wrap gap-2">
-            {files.map((file, index) => (
-              <li key={`${file.name}-${index}`}>
-                <button
-                  type="button"
-                  className="chip"
-                  aria-label={`Bild ${index + 1} entfernen`}
-                  disabled={busy}
-                  onClick={() => setFiles(files.filter((_, position) => position !== index))}
-                >
-                  Bild {index + 1} <X size={14} aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
+        <ScreenshotChips files={files} disabled={busy} onChange={setFiles} />
         <div className="grid grid-cols-2 gap-2">
-          <label className={`btn btn-soft cursor-pointer text-sm ${busy || files.length >= MAX_FILES ? 'opacity-55' : ''}`}>
-            <ImagePlus size={18} aria-hidden /> Screenshot
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/*"
-              multiple
-              className="sr-only"
-              disabled={busy || files.length >= MAX_FILES}
-              onChange={(event) => addFiles(event.target.files)}
-            />
-          </label>
+          <ScreenshotButton files={files} disabled={busy} onChange={setFiles} />
           <button className="btn btn-primary text-sm" disabled={busy || (!instruction.trim() && files.length === 0)}>
             {busy ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Sparkles size={18} aria-hidden />}
             {busy ? 'Einen Moment …' : 'Anpassen'}

@@ -2,13 +2,15 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ClipboardPaste, Link2, Loader2, Sparkles } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ErrorBox, PageHeader } from '../../components/ui'
-import { extractFirstUrl, importRecipeFromLink } from './importLink'
+import { draftFromScreenshots, extractFirstUrl, importRecipeFromLink } from './importLink'
+import { ScreenshotButton, ScreenshotChips } from './ScreenshotPicker'
 
 export function RecipeImportPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const sharedLink = (location.state as { link?: string } | null)?.link ?? null
   const [link, setLink] = useState(sharedLink ?? '')
+  const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
@@ -40,6 +42,18 @@ export function RecipeImportPage() {
       void start(sharedLink)
     }
   }, [sharedLink, start])
+
+  const startFromScreenshots = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const draft = await draftFromScreenshots(files)
+      navigate('/rezepte/neu', { replace: true, state: { draft } })
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
 
   const paste = async () => {
     setError(null)
@@ -79,7 +93,7 @@ export function RecipeImportPage() {
 
   return (
     <div className="pb-10">
-      <PageHeader title="Rezept per Link" back="/rezepte" />
+      <PageHeader title="Rezept hinzufügen" back="/rezepte" />
       <main className="mx-auto max-w-2xl space-y-4 px-4 pt-1">
         <p className="text-muted">
           Füge einen Link von TikTok, Pinterest, Instagram, YouTube oder einem Blog ein. Crack erstellt daraus einen Entwurf,
@@ -111,6 +125,23 @@ export function RecipeImportPage() {
             <Sparkles size={18} aria-hidden /> Rezept erstellen
           </button>
         </form>
+
+        <section className="space-y-2 border-t border-line pt-4">
+          <h2 className="font-semibold">Oder per Screenshot</h2>
+          <p className="text-sm text-muted">Bis zu 4 Bilder mit Zutaten und Schritten, zum Beispiel aus einem Video oder Kochbuch.</p>
+          <ScreenshotChips files={files} disabled={busy} onChange={setFiles} />
+          <div className="grid grid-cols-2 gap-2">
+            <ScreenshotButton files={files} disabled={busy} label="Bilder wählen" onChange={setFiles} />
+            <button
+              type="button"
+              className="btn btn-primary text-sm"
+              disabled={files.length === 0}
+              onClick={() => void startFromScreenshots()}
+            >
+              <Sparkles size={18} aria-hidden /> Rezept erstellen
+            </button>
+          </div>
+        </section>
 
         {error && <ErrorBox message={error} />}
 

@@ -224,6 +224,21 @@ export function findTikTokPost(html: string): TikTokPost | null {
   }
 }
 
+/** Wiederholt einen Abruf, bis das Ergebnis brauchbar ist. Sonst kommt das letzte Ergebnis zurueck. */
+export async function firstUsable<T>(
+  attempt: (index: number) => Promise<T>,
+  usable: (result: T) => boolean,
+  tries = 3,
+  waitMs = 500,
+): Promise<T> {
+  let result = await attempt(0)
+  for (let index = 1; index < tries && !usable(result); index++) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
+    result = await attempt(index)
+  }
+  return result
+}
+
 /** Bevorzugt deutsche Untertitel, dann englische, sonst die ersten vorhandenen. */
 export function pickSubtitle(subtitles: TikTokPost['subtitles']): string | null {
   const find = (prefix: string) => subtitles.find((entry) => entry.language.startsWith(prefix))

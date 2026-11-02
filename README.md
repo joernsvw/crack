@@ -10,8 +10,7 @@ fertig.
 Zutaten lassen sich von der Rezeptseite auf die Einkaufsliste übernehmen, auch offline.
 
 Das Glücksrad wählt gewichtet nach Bewertung aus, lässt sich nach Kategorie filtern, und Rezepte lassen sich ausblenden.
-
-- **Phase 2 (Rest):** Neues Rezept direkt aus einem Screenshot
+Neue Rezepte entstehen auch direkt aus bis zu 4 Screenshots.
 
 ## Technik
 

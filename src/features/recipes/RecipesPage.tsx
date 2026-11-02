@@ -37,7 +37,7 @@ export function RecipesPage() {
             <Dices size={20} aria-hidden /> Was essen wir heute?
           </Link>
           <Link to="/rezepte/import" className="btn btn-soft w-full">
-            <Link2 size={20} aria-hidden /> Rezept per Link hinzufügen
+            <Link2 size={20} aria-hidden /> Rezept per Link oder Screenshot
           </Link>
         </div>
         <div className="flex gap-2">

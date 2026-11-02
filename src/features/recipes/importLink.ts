@@ -25,9 +25,8 @@ export function importRecipeFromLink(url: string): Promise<ImportedDraft> {
   return callRecipeFunction({ url })
 }
 
-/** Liefert einen Vorschlag fuer das ganze Rezept. Gespeichert wird erst im Formular. */
-export async function proposeRecipeEdit(recipeId: string, instruction: string, files: File[]): Promise<ImportedDraft> {
-  const screenshots = await Promise.all(
+function prepareScreenshots(files: File[]) {
+  return Promise.all(
     files.map(async (file) => {
       try {
         return { type: 'image/jpeg', data: await blobToBase64(await compressImage(file)) }
@@ -36,7 +35,15 @@ export async function proposeRecipeEdit(recipeId: string, instruction: string, f
       }
     }),
   )
-  return callRecipeFunction({ recipe_id: recipeId, instruction, screenshots })
+}
+
+/** Liefert einen Vorschlag fuer das ganze Rezept. Gespeichert wird erst im Formular. */
+export async function proposeRecipeEdit(recipeId: string, instruction: string, files: File[]): Promise<ImportedDraft> {
+  return callRecipeFunction({ recipe_id: recipeId, instruction, screenshots: await prepareScreenshots(files) })
+}
+
+export async function draftFromScreenshots(files: File[]): Promise<ImportedDraft> {
+  return callRecipeFunction({ action: 'screenshots', screenshots: await prepareScreenshots(files) })
 }
 
 async function callRecipeFunction(body: Record<string, unknown>): Promise<ImportedDraft> {
@@ -50,7 +57,12 @@ export async function invokeAiFunction<T>(body: Record<string, unknown>): Promis
       const body = await (error.context as Response).json().catch(() => null)
       throw new Error(body?.error ?? 'Das hat nicht geklappt. Bitte versuche es noch einmal.')
     }
-    throw new Error(navigator.onLine ? 'Das hat nicht geklappt. Bitte versuche es noch einmal.' : 'Dafür brauchst du eine Internetverbindung.')
+    // Das iPhone trennt die Verbindung, sobald man die App verlaesst, zum Beispiel um zu TikTok zu wechseln.
+    throw new Error(
+      navigator.onLine
+        ? 'Die Verbindung wurde unterbrochen. Lass Crack beim Einlesen geöffnet und versuche es noch einmal.'
+        : 'Dafür brauchst du eine Internetverbindung.',
+    )
   }
   return data as T
 }

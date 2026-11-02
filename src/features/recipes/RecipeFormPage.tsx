@@ -160,7 +160,9 @@ function RecipeForm({ existing, draft }: { existing: Recipe | null; draft: Impor
               ? 'Vorschlag der KI. Noch ist nichts gespeichert: Prüfe die Änderungen und tippe auf Speichern.'
               : draft.ingredients.length > 0
                 ? 'Entwurf erstellt. Prüfe kurz alles und tippe dann auf Speichern.'
-                : 'In diesem Link standen keine Zutaten, zum Beispiel weil sie nur im Video vorkommen. Speichere das Rezept und füge danach einen Screenshot der Zutaten hinzu.'}
+                : draft.source_url
+                  ? 'In diesem Link standen keine Zutaten, zum Beispiel weil sie nur im Video vorkommen. Speichere das Rezept und füge danach einen Screenshot der Zutaten hinzu.'
+                  : 'Auf den Bildern waren keine Zutaten zu erkennen. Speichere das Rezept und füge danach einen Screenshot der Zutaten hinzu.'}
           </p>
         )}
         <div>

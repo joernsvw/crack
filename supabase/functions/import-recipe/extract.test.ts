@@ -3,6 +3,7 @@ import {
   decodeEntities,
   findJsonLdRecipe,
   findTikTokPost,
+  firstUsable,
   htmlToText,
   isPrivateIp,
   metaContent,
@@ -145,6 +146,28 @@ describe('findTikTokPost', () => {
     expect(findTikTokPost('<html>nichts</html>')).toBeNull()
     expect(findTikTokPost(page({ 'webapp.app-context': {} }))).toBeNull()
     expect(findTikTokPost('<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{kaputt</script>')).toBeNull()
+  })
+})
+
+describe('firstUsable', () => {
+  it('hoert beim ersten brauchbaren Ergebnis auf', async () => {
+    const calls: number[] = []
+    const result = await firstUsable(async (index) => (calls.push(index), index), (value) => value === 1, 3, 0)
+    expect(result).toBe(1)
+    expect(calls).toEqual([0, 1])
+  })
+
+  it('gibt nach den Versuchen das letzte Ergebnis zurueck', async () => {
+    let calls = 0
+    const result = await firstUsable(async () => (++calls, null), (value) => value !== null, 3, 0)
+    expect(result).toBeNull()
+    expect(calls).toBe(3)
+  })
+
+  it('braucht beim ersten Treffer keinen zweiten Versuch', async () => {
+    let calls = 0
+    await firstUsable(async () => ++calls, () => true, 3, 0)
+    expect(calls).toBe(1)
   })
 })
 
