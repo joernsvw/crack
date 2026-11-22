@@ -614,12 +614,12 @@ function withImages(suggestions: Suggestion[]): Promise<Suggestion[]> {
 // ---------------------------------------------------------------------------
 
 // Jeder Teil laeuft in einem eigenen kurzen Aufruf. So stoesst keiner an das Zeitlimit von etwa 150 Sekunden,
-// und der Speicher haelt immer nur einen Teil. Drei Ketten laufen nebeneinander: Teil 1, 4, 7 … / 2, 5, 8 … / 3, 6, 9 …
+// und der Speicher haelt immer nur einen Teil. Drei Ketten laufen nebeneinander, jede mit ihrer Liste von Teilen.
 const PROSPECT_PARALLEL = 3
 /** Abgelaufene Prospekte bleiben noch zwei Wochen sichtbar, dann werden sie mit ihren Angeboten geloescht. */
 const PROSPECT_KEEP_DAYS = 14
 const PROSPECT_MAX_CHUNKS = 30
-/** Ohne Fortschritt so lange gilt ein Auslesen als haengengeblieben und darf neu gestartet werden. */
+/** Ohne Fortschritt so lange gilt ein Auslesen als haengengeblieben und darf fortgesetzt werden. Die App nutzt denselben Wert. */
 const PROSPECT_STALE_MS = 5 * 60_000
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined
@@ -630,20 +630,21 @@ interface ProspectRow {
   valid_from: string | null
   valid_to: string | null
   chunk_paths: string[]
+  chunks_finished: number[]
   status: string
   updated_at: string
   validity: ProspectChunkResult[]
 }
 
-const PROSPECT_COLUMNS = 'id, store, valid_from, valid_to, chunk_paths, status, updated_at, validity'
+const PROSPECT_COLUMNS = 'id, store, valid_from, valid_to, chunk_paths, chunks_finished, status, updated_at, validity'
 
 function runInBackground(job: Promise<unknown>) {
   if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(job)
   return job
 }
 
-/** Startet den naechsten Teil als eigenen Aufruf dieser Funktion, im Namen derselben Person. */
-async function triggerChunk(token: string, prospectId: string, index: number) {
+/** Startet den naechsten Teil einer Kette als eigenen Aufruf dieser Funktion, im Namen derselben Person. */
+async function triggerChunk(token: string, prospectId: string, queue: number[]) {
   const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/import-recipe`, {
     method: 'POST',
     headers: {
@@ -651,11 +652,11 @@ async function triggerChunk(token: string, prospectId: string, index: number) {
       apikey: Deno.env.get('SUPABASE_ANON_KEY')!,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ action: 'prospect_chunk', prospect_id: prospectId, index }),
+    body: JSON.stringify({ action: 'prospect_chunk', prospect_id: prospectId, queue }),
     signal: AbortSignal.timeout(20_000),
   })
   await response.body?.cancel()
-  if (!response.ok) throw new Error(`Teil ${index + 1} liess sich nicht starten (${response.status})`)
+  if (!response.ok) throw new Error(`Teil ${queue[0] + 1} liess sich nicht starten (${response.status})`)
 }
 
 async function loadProspect(supabase: SupabaseClient, householdId: string, prospectId: unknown): Promise<ProspectRow> {
@@ -677,40 +678,61 @@ async function failProspect(supabase: SupabaseClient, prospectId: string, error:
     .eq('status', 'processing')
 }
 
-/** Liest einen Teil aus, speichert dessen Angebote sofort und stoesst den naechsten Teil derselben Kette an. */
-async function readChunk(supabase: SupabaseClient, householdId: string, token: string, prospect: ProspectRow, index: number) {
+/**
+ * Liest den ersten Teil der Kette, speichert dessen Angebote und stoesst den Rest der Kette an.
+ * Ist der Teil schon gezaehlt (zum Beispiel von einem zweiten Start), werden die eigenen Angebote wieder entfernt.
+ */
+async function readChunk(supabase: SupabaseClient, householdId: string, token: string, prospect: ProspectRow, queue: number[]) {
+  const [index, ...rest] = queue
   try {
-    const { data: allowed, error: limitError } = await supabase.rpc('consume_ai_call')
-    if (limitError) throw limitError
-    if (!allowed) throw new UserError('Das Tageslimit für KI-Aufrufe ist erreicht. Lies den Prospekt morgen erneut aus.', 429)
-    const { data: file, error: downloadError } = await supabase.storage.from('prospects').download(prospect.chunk_paths[index])
-    if (downloadError || !file) throw new UserError('Ein Teil des Prospekts konnte nicht geladen werden.', 500)
-    const result = await askClaude<ProspectChunkResult>(
-      prospectPrompt(prospect.store, new Date().toISOString().slice(0, 10)),
-      [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: toBase64(new Uint8Array(await file.arrayBuffer())) } },
-        { type: 'text', text: 'Lies alle passenden Angebote auf diesen Seiten aus.' },
-      ],
-      PROSPECT_SCHEMA,
-    )
-    const offers = normalizeOffers([result]).map((offer) => ({ ...offer, household_id: householdId, prospect_id: prospect.id, store: prospect.store }))
-    if (offers.length) {
-      const { error } = await supabase.from('offers').insert(offers)
-      if (error) throw error
+    if (!prospect.chunks_finished.includes(index)) {
+      const { data: allowed, error: limitError } = await supabase.rpc('consume_ai_call')
+      if (limitError) throw limitError
+      if (!allowed) throw new UserError('Das Tageslimit für KI-Aufrufe ist erreicht. Lies den Prospekt morgen erneut aus.', 429)
+      const { data: file, error: downloadError } = await supabase.storage.from('prospects').download(prospect.chunk_paths[index])
+      if (downloadError || !file) throw new UserError('Ein Teil des Prospekts konnte nicht geladen werden.', 500)
+      const result = await askClaude<ProspectChunkResult>(
+        prospectPrompt(prospect.store, new Date().toISOString().slice(0, 10)),
+        [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: toBase64(new Uint8Array(await file.arrayBuffer())) } },
+          { type: 'text', text: 'Lies alle passenden Angebote auf diesen Seiten aus.' },
+        ],
+        PROSPECT_SCHEMA,
+      )
+      const offers = normalizeOffers([result]).map((offer) => ({
+        ...offer,
+        household_id: householdId,
+        prospect_id: prospect.id,
+        store: prospect.store,
+        chunk: index,
+      }))
+      const inserted: string[] = []
+      if (offers.length) {
+        const { data, error } = await supabase.from('offers').insert(offers).select('id')
+        if (error) throw error
+        inserted.push(...data.map((row) => row.id as string))
+      }
+      const { data: done, error: doneError } = await supabase.rpc('prospect_chunk_done', {
+        p_id: prospect.id,
+        p_index: index,
+        p_from: validDate(result.valid_from),
+        p_to: validDate(result.valid_to),
+      })
+      if (doneError) throw doneError
+      if (typeof done !== 'number') {
+        // Schon gezaehlt, geloescht oder fehlgeschlagen: eigene Angebote zurueck, diese Kette endet hier.
+        for (let start = 0; start < inserted.length; start += 200) {
+          await supabase.from('offers').delete().in('id', inserted.slice(start, start + 200))
+        }
+        return
+      }
+      console.log('Prospekt-Teil', { store: prospect.store, teil: index + 1, von: prospect.chunk_paths.length, angebote: offers.length })
+      if (done === prospect.chunk_paths.length) {
+        await finishProspect(supabase, householdId, prospect.id)
+        return
+      }
     }
-    const { data: done, error: doneError } = await supabase.rpc('prospect_chunk_done', {
-      p_id: prospect.id,
-      p_from: validDate(result.valid_from),
-      p_to: validDate(result.valid_to),
-    })
-    if (doneError) throw doneError
-    // Kein Wert: Der Prospekt wurde inzwischen geloescht, neu gestartet oder ist fehlgeschlagen.
-    if (typeof done !== 'number') return
-    console.log('Prospekt-Teil', { store: prospect.store, teil: index + 1, von: prospect.chunk_paths.length, angebote: offers.length })
-
-    const next = index + PROSPECT_PARALLEL
-    if (next < prospect.chunk_paths.length) await triggerChunk(token, prospect.id, next)
-    if (done === prospect.chunk_paths.length) await finishProspect(supabase, householdId, prospect.id)
+    if (rest.length) await triggerChunk(token, prospect.id, rest)
   } catch (error) {
     await failProspect(supabase, prospect.id, error)
   }
@@ -763,24 +785,39 @@ function checkChunkPaths(householdId: string, prospect: ProspectRow) {
   if (prospect.chunk_paths.length > PROSPECT_MAX_CHUNKS) throw new UserError('Der Prospekt ist zu groß. Lade bitte nur einen Teil hoch.', 400)
 }
 
-/** Startet das Auslesen und antwortet sofort. Die App sieht den Fortschritt live, man muss sie nicht offen lassen. */
+/**
+ * Startet das Auslesen oder setzt es fort und antwortet sofort. Schon fertige Teile bleiben, nur die fehlenden
+ * werden gelesen. Die Bedingung auf updated_at sorgt dafuer, dass von zwei gleichzeitigen Starts nur einer zaehlt.
+ */
 async function startProspect(supabase: SupabaseClient, householdId: string, token: string, prospectId: unknown) {
   const prospect = await loadProspect(supabase, householdId, prospectId)
   const stale = Date.now() - new Date(prospect.updated_at).getTime() > PROSPECT_STALE_MS
   if (prospect.status === 'processing' && !stale) throw new UserError('Dieser Prospekt wird gerade schon ausgelesen.', 409)
   checkChunkPaths(householdId, prospect)
 
-  // Neu starten ersetzt alles, was ein frueherer Versuch schon gespeichert hat.
-  await supabase.from('offers').delete().eq('prospect_id', prospect.id)
-  const { error } = await supabase
+  const { data: claimed, error } = await supabase
     .from('prospects')
-    .update({ status: 'processing', error: null, chunks_done: 0, chunks_total: prospect.chunk_paths.length, validity: [], updated_at: new Date().toISOString() })
+    .update({ status: 'processing', error: null, chunks_total: prospect.chunk_paths.length, updated_at: new Date().toISOString() })
     .eq('id', prospect.id)
+    .eq('updated_at', prospect.updated_at)
+    .select('id')
   if (error) throw error
+  if (!claimed?.length) throw new UserError('Dieser Prospekt wird gerade schon ausgelesen.', 409)
+
+  const missing = prospect.chunk_paths.map((_, index) => index).filter((index) => !prospect.chunks_finished.includes(index))
+  // Halbe Ergebnisse eines abgebrochenen Versuchs weg, fertige Teile bleiben.
+  if (prospect.chunks_finished.length === 0) await supabase.from('offers').delete().eq('prospect_id', prospect.id)
+  else if (missing.length) await supabase.from('offers').delete().eq('prospect_id', prospect.id).in('chunk', missing)
+
+  if (missing.length === 0) {
+    await finishProspect(supabase, householdId, prospect.id)
+    return
+  }
+  const queues = Array.from({ length: Math.min(PROSPECT_PARALLEL, missing.length) }, (_, chain) =>
+    missing.filter((_, position) => position % PROSPECT_PARALLEL === chain),
+  )
   try {
-    for (let index = 0; index < Math.min(PROSPECT_PARALLEL, prospect.chunk_paths.length); index++) {
-      await triggerChunk(token, prospect.id, index)
-    }
+    for (const queue of queues) await triggerChunk(token, prospect.id, queue)
   } catch (err) {
     await failProspect(supabase, prospect.id, err)
     throw new UserError('Das Auslesen konnte nicht starten. Bitte versuche es noch einmal.', 502)
@@ -788,13 +825,16 @@ async function startProspect(supabase: SupabaseClient, householdId: string, toke
 }
 
 /** Ein Teil, angestossen von startProspect oder vom vorherigen Teil derselben Kette. */
-async function startChunk(supabase: SupabaseClient, householdId: string, token: string, prospectId: unknown, rawIndex: unknown) {
+async function startChunk(supabase: SupabaseClient, householdId: string, token: string, prospectId: unknown, rawQueue: unknown) {
   const prospect = await loadProspect(supabase, householdId, prospectId)
-  const index = Number(rawIndex)
   if (prospect.status !== 'processing') return
   checkChunkPaths(householdId, prospect)
-  if (!Number.isInteger(index) || index < 0 || index >= prospect.chunk_paths.length) throw new UserError('Diesen Teil gibt es nicht.', 400)
-  void runInBackground(readChunk(supabase, householdId, token, prospect, index))
+  const total = prospect.chunk_paths.length
+  const queue = Array.isArray(rawQueue) ? rawQueue : []
+  const valid = queue.length > 0 && queue.length <= total && new Set(queue).size === queue.length &&
+    queue.every((index) => Number.isInteger(index) && index >= 0 && index < total)
+  if (!valid) throw new UserError('Diesen Teil gibt es nicht.', 400)
+  void runInBackground(readChunk(supabase, householdId, token, prospect, queue as number[]))
 }
 
 /** Neue Gerichte aus Bewertungen und Profil. Nur der normale Vorschlag wird gemerkt, Reste sind jedes Mal anders. */
@@ -906,7 +946,7 @@ Deno.serve(async (request) => {
       return reply(202, { started: true })
     }
     if (body?.action === 'prospect_chunk') {
-      await startChunk(supabase, member.household_id, token, body.prospect_id, body.index)
+      await startChunk(supabase, member.household_id, token, body.prospect_id, body.queue)
       return reply(202, { started: true })
     }
 

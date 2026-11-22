@@ -84,6 +84,13 @@ export function matchOffer(ingredient: string, offerName: string): MatchConfiden
   return null
 }
 
+/** So lange ohne Fortschritt gilt ein Auslesen als haengengeblieben. Die Edge Function nutzt denselben Wert. */
+export const STALE_MS = 5 * 60_000
+
+export function isStuck(prospect: Prospect, now = Date.now()): boolean {
+  return prospect.status === 'processing' && now - new Date(prospect.updated_at).getTime() > STALE_MS
+}
+
 /** Ein Tag als JJJJ-MM-TT in Ortszeit. */
 export function isoDay(date: Date): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)

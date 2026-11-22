@@ -87,7 +87,10 @@ Pexels vergibt derzeit keine neuen Schlüssel, Unsplash scheiterte an der Cloudf
 (max. 3 Seiten, 30 Teile). `action: 'prospect'` startet drei Ketten, jeder Teil läuft als eigener Aufruf
 (`action: 'prospect_chunk'`, ruft sich selbst mit dem Token der Person auf), speichert sofort und zählt mit
 `prospect_chunk_done` hoch; der letzte Teil räumt auf. Grund: Ein Aufruf darf im Gratis-Plan nur ~150 s laufen, ein
-erster Versuch mit allen Teilen in einem Hintergrundprozess blieb hängen. 1 KI-Aufruf je Teil. Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
+erster Versuch mit allen Teilen in einem Hintergrundprozess blieb hängen. 1 KI-Aufruf je Teil.
+Jede Kette bekommt eine Liste von Teilen (`queue`); fertige Teile stehen in `chunks_finished`, Angebote tragen `chunk`.
+Ein Neustart setzt nur fehlende Teile fort; `updated_at` als Bedingung lässt nur einen Start zählen. `ProspectWatchdog`
+(in TabLayout und auf der Angebote-Seite) setzt nach 5 Minuten ohne Fortschritt automatisch fort, solange jemand die App offen hat. Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
 als Test-Knopf ohne KI (`weekPlan.ts`, Kochtage je Handy gemerkt).
 
 Offen, jeweils noch zu beobachten:

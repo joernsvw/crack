@@ -12,7 +12,8 @@ import { useImageUrl, useRecipes } from '../recipes/data'
 import { StarsDisplay } from '../recipes/Stars'
 import { useShopping } from '../shopping/useShopping'
 import { deleteProspect, startReading, STORES, updateValidity, uploadProspect, useOffers, useProspects } from './data'
-import { activeOffers, compareShoppingList, formatPrice, isoDay, nextMonday, scanRecipes, type OfferMatch } from './match'
+import { activeOffers, compareShoppingList, formatPrice, isoDay, isStuck, nextMonday, scanRecipes, type OfferMatch } from './match'
+import { ProspectWatchdog } from './ProspectWatchdog'
 import { weekPlan, type PlanEntry } from './weekPlan'
 
 type OffersTab = 'prospects' | 'recipes' | 'shopping'
@@ -119,6 +120,7 @@ export function OffersPage() {
         )}
       </main>
 
+      <ProspectWatchdog />
       {planOpen && <WeekPlanSheet householdId={householdId} userId={user!.id} offers={active} onClose={() => setPlanOpen(false)} />}
     </div>
   )
@@ -263,23 +265,28 @@ function ProspectCard({
   const [editing, setEditing] = useState(false)
   const [search, setSearch] = useState('')
 
-  const run = async (task: () => Promise<unknown>) => {
+  // Solange eine Aktion laeuft, sind die Knoepfe gesperrt. So startet ein doppeltes Tippen nichts doppelt.
+  const [busy, setBusy] = useState<string | null>(null)
+  const run = async (label: string, task: () => Promise<unknown>) => {
+    if (busy) return
+    setBusy(label)
     setError(null)
     try {
       await task()
     } catch (err) {
       setError((err as Error).message)
     } finally {
+      setBusy(null)
       onChanged()
     }
   }
 
   const remove = () => {
-    if (window.confirm(`Prospekt von ${prospect.store} mit allen Angeboten löschen?`)) void run(() => deleteProspect(prospect))
+    if (window.confirm(`Prospekt von ${prospect.store} mit allen Angeboten löschen?`)) void run('delete', () => deleteProspect(prospect))
   }
 
   // Ohne Fortschritt seit fuenf Minuten ist das Auslesen vermutlich abgebrochen, dann darf man neu starten.
-  const stuck = prospect.status === 'processing' && Date.now() - new Date(prospect.updated_at).getTime() > 5 * 60_000
+  const stuck = isStuck(prospect)
   const term = search.trim().toLowerCase()
   const list = useMemo(
     () =>
@@ -307,13 +314,13 @@ function ProspectCard({
               : prospect.status === 'error'
                 ? prospect.error ?? 'Auslesen fehlgeschlagen'
                 : stuck
-                  ? 'Das Auslesen hängt fest. Tippe auf „Erneut auslesen“.'
+                  ? 'Das Auslesen hängt fest und wird gleich fortgesetzt. Fertige Teile bleiben erhalten.'
                 : prospect.chunks_total > 0
                   ? `Wird ausgelesen … ${prospect.chunks_done} von ${prospect.chunks_total} Teilen`
                   : 'Wird hochgeladen …'}
           </p>
         </div>
-        <button className="icon-btn" aria-label={`Prospekt von ${prospect.store} löschen`} onClick={remove}>
+        <button className="icon-btn" aria-label={`Prospekt von ${prospect.store} löschen`} onClick={remove} disabled={busy !== null}>
           <Trash2 size={20} />
         </button>
       </div>
@@ -338,8 +345,9 @@ function ProspectCard({
           </button>
         )}
         {(prospect.status === 'error' || stuck) && (
-          <button className="chip" onClick={() => void run(() => startReading(prospect.id))}>
-            <RefreshCw size={14} aria-hidden /> Erneut auslesen
+          <button className="chip" disabled={busy !== null} onClick={() => void run('restart', () => startReading(prospect.id))}>
+            <RefreshCw size={14} className={busy === 'restart' ? 'animate-spin' : ''} aria-hidden />
+            {busy === 'restart' ? 'Wird gestartet …' : 'Erneut auslesen'}
           </button>
         )}
       </div>
@@ -348,7 +356,7 @@ function ProspectCard({
         <ValidityEditor
           prospect={prospect}
           onSave={(from, to) =>
-            void run(async () => {
+            void run('validity', async () => {
               await updateValidity(prospect.id, from, to)
               setEditing(false)
             })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Offer, Prospect, Recipe, ShoppingItem } from '../../lib/types'
-import { activeOffers, compareShoppingList, findOffers, ingredientKey, matchOffer, nextMonday, offerValidOn, scanRecipes, stem } from './match'
+import { activeOffers, compareShoppingList, findOffers, ingredientKey, isStuck, matchOffer, nextMonday, offerValidOn, scanRecipes, stem } from './match'
 
 const offer = (name: string, price: number, extra: Partial<Offer> = {}): Offer => ({
   id: `${name}-${price}`,
@@ -88,6 +88,13 @@ describe('Gueltigkeit', () => {
   it('zeigt nur Angebote fertig ausgelesener Prospekte', () => {
     const offers = [offer('A', 1), offer('B', 1, { prospect_id: 'q' })]
     expect(activeOffers(offers, [prospect(), prospect({ id: 'q', status: 'processing' })], '2026-11-25').map((entry) => entry.name)).toEqual(['A'])
+  })
+
+  it('erkennt haengengebliebenes Auslesen erst nach fuenf Minuten ohne Fortschritt', () => {
+    const now = new Date('2026-11-22T12:10:00Z').getTime()
+    expect(isStuck(prospect({ status: 'processing', updated_at: '2026-11-22T12:04:00Z' }), now)).toBe(true)
+    expect(isStuck(prospect({ status: 'processing', updated_at: '2026-11-22T12:06:00Z' }), now)).toBe(false)
+    expect(isStuck(prospect({ status: 'ready', updated_at: '2026-11-22T11:00:00Z' }), now)).toBe(false)
   })
 
   it('findet den naechsten Montag', () => {
