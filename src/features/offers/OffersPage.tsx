@@ -278,6 +278,8 @@ function ProspectCard({
     if (window.confirm(`Prospekt von ${prospect.store} mit allen Angeboten löschen?`)) void run(() => deleteProspect(prospect))
   }
 
+  // Ohne Fortschritt seit fuenf Minuten ist das Auslesen vermutlich abgebrochen, dann darf man neu starten.
+  const stuck = prospect.status === 'processing' && Date.now() - new Date(prospect.updated_at).getTime() > 5 * 60_000
   const term = search.trim().toLowerCase()
   const list = useMemo(
     () =>
@@ -304,6 +306,8 @@ function ProspectCard({
               ? `${prospect.offer_count} Angebote`
               : prospect.status === 'error'
                 ? prospect.error ?? 'Auslesen fehlgeschlagen'
+                : stuck
+                  ? 'Das Auslesen hängt fest. Tippe auf „Erneut auslesen“.'
                 : prospect.chunks_total > 0
                   ? `Wird ausgelesen … ${prospect.chunks_done} von ${prospect.chunks_total} Teilen`
                   : 'Wird hochgeladen …'}
@@ -333,7 +337,7 @@ function ProspectCard({
             Gültigkeit ändern
           </button>
         )}
-        {prospect.status === 'error' && (
+        {(prospect.status === 'error' || stuck) && (
           <button className="chip" onClick={() => void run(() => startReading(prospect.id))}>
             <RefreshCw size={14} aria-hidden /> Erneut auslesen
           </button>

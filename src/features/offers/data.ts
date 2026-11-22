@@ -5,10 +5,11 @@ import { invokeAiFunction } from '../recipes/importLink'
 
 export const STORES = ['Lidl', 'Netto', 'Marktkauf', 'Rewe'] as const
 
-const MAX_PAGES = 120
+const MAX_PAGES = 90
 const MAX_FILE_BYTES = 150 * 1024 * 1024
-const TARGET_CHUNK_BYTES = 12 * 1024 * 1024
-const MAX_PAGES_PER_CHUNK = 6
+// Kleine Teile: Jeder wird in einem eigenen kurzen Aufruf gelesen, der hoechstens etwa 150 Sekunden darf.
+const TARGET_CHUNK_BYTES = 6 * 1024 * 1024
+const MAX_PAGES_PER_CHUNK = 3
 // Jeder Teil ist ein KI-Aufruf, am Tag gibt es 50.
 const MAX_CHUNKS = 30
 
@@ -20,7 +21,7 @@ export function useProspects(householdId: string) {
     fetcher: async () => {
       const { data, error } = await supabase
         .from('prospects')
-        .select('id, household_id, store, file_name, valid_from, valid_to, status, error, chunks_total, chunks_done, offer_count, created_at')
+        .select('id, household_id, store, file_name, valid_from, valid_to, status, error, chunks_total, chunks_done, offer_count, created_at, updated_at')
         .eq('household_id', householdId)
         .order('created_at', { ascending: false })
       if (error) throw error

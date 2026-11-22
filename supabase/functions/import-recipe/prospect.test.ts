@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapLimit, normalizeOffers, pickValidity, validDate, type ModelOffer } from './prospect'
+import { mapLimit, normalizeOffers, pickValidity, validDate, type ModelOffer, duplicateOfferIds, offerKey } from './prospect'
 
 const offer = (extra: Partial<ModelOffer> = {}): ModelOffer => ({
   name: ' Hähnchen-Brustfilets ',
@@ -94,5 +94,17 @@ describe('mapLimit', () => {
     })
     expect(result).toEqual([0, 1, 2, 3])
     expect(peak).toBe(2)
+  })
+})
+
+describe('duplicateOfferIds', () => {
+  it('behaelt das erste und meldet Doppelte ueber Teile hinweg', () => {
+    const rows = [
+      { id: 'a', name: 'Tomaten', quantity: '1 kg', price: 1.29 },
+      { id: 'b', name: 'tomaten ', quantity: '1 KG', price: 1.29 },
+      { id: 'c', name: 'Tomaten', quantity: '500 g', price: 1.29 },
+    ]
+    expect(duplicateOfferIds(rows)).toEqual(['b'])
+    expect(offerKey(rows[0])).toBe('tomaten|1 kg|1.29')
   })
 })

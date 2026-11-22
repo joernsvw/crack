@@ -15,7 +15,7 @@ const defaults = {
   recipe_ingredients: () => ({ id: uuid(), sort_order: 0 }),
   recipe_ratings: () => ({ id: uuid(), note: null, modifications: [] }),
   cook_history: () => ({ id: uuid(), cooked_at: now(), cooked_by: USER.id }),
-  prospects: () => ({ id: uuid(), status: 'uploaded', error: null, file_name: null, valid_from: null, valid_to: null, chunk_paths: [], chunks_total: 0, chunks_done: 0, offer_count: 0, created_at: now() }),
+  prospects: () => ({ id: uuid(), status: 'uploaded', error: null, file_name: null, valid_from: null, valid_to: null, chunk_paths: [], chunks_total: 0, chunks_done: 0, offer_count: 0, validity: [], created_at: now(), updated_at: now() }),
   offers: () => ({ id: uuid(), brand: null, quantity: null, original_price: null, base_price: null, condition: null, valid_from: null, valid_to: null, page: 1 }),
   notes: () => ({ id: uuid(), title: '', preview: '', pinned: false, content: { type: 'doc', content: [{ type: 'paragraph' }] }, updated_by: USER.id, updated_at: now(), created_at: now() }),
 }

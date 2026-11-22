@@ -33,6 +33,7 @@ const prospect = (extra: Partial<Prospect> = {}): Prospect => ({
   chunks_done: 1,
   offer_count: 1,
   created_at: '2026-11-20',
+  updated_at: '2026-11-20',
   ...extra,
 })
 

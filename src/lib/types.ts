@@ -65,6 +65,8 @@ export interface Prospect {
   chunks_done: number
   offer_count: number
   created_at: string
+  /** Letzter Fortschritt, daran erkennt die App ein haengengebliebenes Auslesen. */
+  updated_at: string
 }
 
 export interface Offer {

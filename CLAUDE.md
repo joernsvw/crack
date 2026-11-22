@@ -84,8 +84,10 @@ Gemeinsame Bewertung 0–5 Sterne mit Rhythmus (`recipes.rating`, `recipe_rating
 „Gekocht & gespeichert“, Vorschläge mit Bildern (Pexels, sobald `PEXELS_API_KEY` gesetzt ist, dann Openverse ohne Schlüssel, dann Wikimedia;
 Pexels vergibt derzeit keine neuen Schlüssel, Unsplash scheiterte an der Cloudflare-Prüfung) und
 „Mal wieder fällig“. Angebote (`/angebote`): Prospekt-PDFs hochladen, das Handy teilt sie mit pdf-lib in Stücke
-(max. 6 Seiten, 30 Teile), die Funktion liest sie mit `action: 'prospect'` im Hintergrund aus (`EdgeRuntime.waitUntil`,
-1 KI-Aufruf je Teil). Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
+(max. 3 Seiten, 30 Teile). `action: 'prospect'` startet drei Ketten, jeder Teil läuft als eigener Aufruf
+(`action: 'prospect_chunk'`, ruft sich selbst mit dem Token der Person auf), speichert sofort und zählt mit
+`prospect_chunk_done` hoch; der letzte Teil räumt auf. Grund: Ein Aufruf darf im Gratis-Plan nur ~150 s laufen, ein
+erster Versuch mit allen Teilen in einem Hintergrundprozess blieb hängen. 1 KI-Aufruf je Teil. Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
 als Test-Knopf ohne KI (`weekPlan.ts`, Kochtage je Handy gemerkt).
 
 Offen, jeweils noch zu beobachten:

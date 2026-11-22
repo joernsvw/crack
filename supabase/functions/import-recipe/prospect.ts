@@ -80,6 +80,23 @@ const text = (value: string | null | undefined, max: number) => value?.trim().sl
 const money = (value: number | null | undefined) =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 10000 ? Math.round(value * 100) / 100 : null
 
+/** Gleicher Name, gleiche Menge, gleicher Preis: dasselbe Angebot, auch wenn es auf zwei Seiten steht. */
+export function offerKey(offer: { name: string; quantity: string | null; price: number }): string {
+  return `${offer.name.trim().toLowerCase()}|${offer.quantity?.trim().toLowerCase() ?? ''}|${Number(offer.price)}`
+}
+
+/** Ids der Angebote, die ein frueheres mit gleichem Schluessel doppeln. Jeder Teil speichert fuer sich, das raeumt am Ende auf. */
+export function duplicateOfferIds(rows: { id: string; name: string; quantity: string | null; price: number }[]): string[] {
+  const seen = new Set<string>()
+  const duplicates: string[] = []
+  for (const row of rows) {
+    const key = offerKey(row)
+    if (seen.has(key)) duplicates.push(row.id)
+    else seen.add(key)
+  }
+  return duplicates
+}
+
 /** Bereinigt die Angebote eines Teils. Doppelte Angebote (gleicher Name, gleiche Menge, gleicher Preis) fliegen raus. */
 export function normalizeOffers(results: ProspectChunkResult[]): Omit<ModelOffer, never>[] {
   const seen = new Set<string>()
@@ -90,7 +107,7 @@ export function normalizeOffers(results: ProspectChunkResult[]): Omit<ModelOffer
       const price = money(raw.price)
       if (!name || price === null) continue
       const quantity = text(raw.quantity, 40)
-      const key = `${name.toLowerCase()}|${quantity?.toLowerCase() ?? ''}|${price}`
+      const key = offerKey({ name, quantity, price })
       if (seen.has(key)) continue
       seen.add(key)
       const original = money(raw.original_price)

@@ -70,6 +70,13 @@ await as(A,()=>q(`insert into storage.objects (bucket_id,name) values ('prospect
 ok('B sieht die PDF-Teile',(await as(B,()=>q(`select name from storage.objects where bucket_id='prospects'`))).rows.length===1)
 ok('C sieht fremde PDF-Teile nicht',(await as(C,()=>q(`select name from storage.objects where bucket_id='prospects'`))).rows.length===0)
 await rej('C laedt nicht in fremden Ordner',()=>as(C,()=>q(`insert into storage.objects (bucket_id,name) values ('prospects',$1)`,[`${hid}/x/teil-001.pdf`])))
+await as(A,()=>q(`update prospects set status='processing' where id=$1`,[pid]))
+ok('Teil fertig zaehlt hoch',(await as(B,()=>q(`select prospect_chunk_done($1,'2026-11-23','2026-11-28') n`,[pid]))).rows[0].n===1)
+ok('Gueltigkeit des Teils gemerkt',(await as(A,()=>q('select validity from prospects where id=$1',[pid]))).rows[0].validity[0].valid_from==='2026-11-23')
+ok('C zaehlt fremde Prospekte nicht hoch',(await as(C,()=>q(`select prospect_chunk_done($1,null,null) n`,[pid]))).rows[0].n===null)
+ok('Zaehler unveraendert',(await as(A,()=>q('select chunks_done from prospects where id=$1',[pid]))).rows[0].chunks_done===1)
+await rej('anon darf nicht zaehlen',()=>as(null,()=>q(`select prospect_chunk_done($1,null,null)`,[pid])))
+await rej('Gueltigkeit muss Liste sein',()=>as(A,()=>q(`update prospects set validity='{"a":1}' where id=$1`,[pid])))
 await as(A,()=>q('delete from prospects where id=$1',[pid]))
 ok('Loeschen nimmt die Angebote mit',(await q('select count(*)::int n from offers')).rows[0].n===0)
 const no=(await q(`select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity`)).rows
