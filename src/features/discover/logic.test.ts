@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Modification, Recipe } from '../../lib/types'
-import { commonIngredients, matchRecipes, profileHints, sameIngredient, searchLinks } from './logic'
+import { commonIngredients, matchRecipes, profileHints, sameIngredient, searchLinks, tiktokTagLink, toHashtag } from './logic'
 
 const recipe = (title: string, ingredients: string[], stars: number[] = [], mods: Modification[][] = []): Recipe => ({
   id: title,
@@ -35,11 +35,26 @@ describe('sameIngredient', () => {
 })
 
 describe('searchLinks', () => {
-  it('baut kodierte Such-Adressen', () => {
+  it('baut kodierte Such-Adressen mit dem Zusatz Rezept', () => {
     const [tiktok, pinterest, google] = searchLinks('Pasta & Pesto')
-    expect(tiktok.url).toBe('https://www.tiktok.com/search?q=Pasta%20%26%20Pesto')
-    expect(pinterest.url).toBe('https://www.pinterest.com/search/pins/?q=Pasta%20%26%20Pesto')
+    expect(tiktok.url).toBe('https://www.tiktok.com/search/video?q=Pasta%20%26%20Pesto%20Rezept')
+    expect(pinterest.url).toBe('https://www.pinterest.com/search/pins/?q=Pasta%20%26%20Pesto%20Rezept')
     expect(google.url).toBe('https://www.google.com/search?q=Pasta%20%26%20Pesto%20Rezept')
+  })
+
+  it('kopiert den Suchbegriff fuer TikTok und Pinterest mit', () => {
+    expect(searchLinks('Dal').map((link) => link.copy)).toEqual(['Dal Rezept', 'Dal Rezept', null])
+  })
+})
+
+describe('Hashtag', () => {
+  it('macht aus dem Gericht einen Hashtag', () => {
+    expect(toHashtag('Dal Makhani!')).toBe('dalmakhani')
+    expect(toHashtag('Käsespätzle mit Röstzwiebeln')).toBe('käsespätzlemitröstzwiebeln')
+  })
+  it('kodiert den Link', () => {
+    expect(tiktokTagLink('Käsespätzle')?.url).toBe('https://www.tiktok.com/tag/k%C3%A4sesp%C3%A4tzle')
+    expect(tiktokTagLink('!!!')).toBeNull()
   })
 })
 

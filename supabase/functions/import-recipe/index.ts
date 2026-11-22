@@ -21,9 +21,12 @@ import {
   cleanSuggestions,
   LEFTOVERS_RULE,
   parseLeftovers,
+  parsePexels,
+  parseWikimedia,
   SUGGEST_PROMPT,
   SUGGESTION_SCHEMA,
   type Suggestion,
+  type SuggestionImage,
 } from './suggest.ts'
 
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-opus-5-5'
@@ -527,6 +530,56 @@ async function draftFromScreenshots(supabase: SupabaseClient, householdId: strin
   return { ...draft, source_url: null, image_path: null }
 }
 
+const IMAGE_SEARCH_TIMEOUT = 6000
+const WIKIMEDIA_UA = 'Crack/1.0 (private Rezept-App fuer zwei Personen)'
+
+async function searchPexels(query: string): Promise<SuggestionImage | null> {
+  const key = Deno.env.get('PEXELS_API_KEY')
+  if (!key) return null
+  const url = new URL('https://api.pexels.com/v1/search')
+  url.searchParams.set('query', query)
+  url.searchParams.set('per_page', '1')
+  url.searchParams.set('orientation', 'landscape')
+  const response = await fetch(url, { headers: { Authorization: key }, signal: AbortSignal.timeout(IMAGE_SEARCH_TIMEOUT) })
+  return response.ok ? parsePexels(await response.json()) : null
+}
+
+async function searchWikimedia(query: string): Promise<SuggestionImage | null> {
+  const url = new URL('https://commons.wikimedia.org/w/api.php')
+  for (const [key, value] of Object.entries({
+    action: 'query',
+    format: 'json',
+    generator: 'search',
+    gsrsearch: `${query} filetype:bitmap`,
+    gsrnamespace: '6',
+    gsrlimit: '5',
+    prop: 'imageinfo',
+    iiprop: 'url|mime|extmetadata',
+    iiurlwidth: '800',
+  })) url.searchParams.set(key, value)
+  const response = await fetch(url, { headers: { 'User-Agent': WIKIMEDIA_UA }, signal: AbortSignal.timeout(IMAGE_SEARCH_TIMEOUT) })
+  return response.ok ? parseWikimedia(await response.json()) : null
+}
+
+/** Ein Foto je Vorschlag: zuerst Pexels, sonst Wikimedia Commons. Ohne Treffer zeigt die App einen Platzhalter. */
+function withImages(suggestions: Suggestion[]): Promise<Suggestion[]> {
+  return Promise.all(
+    suggestions.map(async ({ image_query, ...suggestion }) => {
+      const query = image_query || suggestion.name
+      let image: SuggestionImage | null = null
+      for (const search of [searchPexels, searchWikimedia]) {
+        try {
+          image = await search(query)
+        } catch {
+          image = null
+        }
+        if (image) break
+      }
+      return { ...suggestion, image }
+    }),
+  )
+}
+
 /** Neue Gerichte aus Bewertungen und Profil. Nur der normale Vorschlag wird gemerkt, Reste sind jedes Mal anders. */
 async function proposeSuggestions(
   supabase: SupabaseClient,
@@ -587,7 +640,7 @@ async function proposeSuggestions(
     SUGGESTION_SCHEMA,
     'medium',
   )
-  const suggestions = cleanSuggestions(result.suggestions ?? [], { avoids, excluded, limit })
+  const suggestions = await withImages(cleanSuggestions(result.suggestions ?? [], { avoids, excluded, limit }))
 
   if (action === 'suggest') {
     const { error } = await supabase

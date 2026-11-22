@@ -66,6 +66,14 @@ export interface Suggestion {
   why: string
   main_ingredients: string[]
   adaptation: string | null
+  /** Gefundenes Foto mit Quelle, null wenn nichts gefunden wurde. Fehlt bei aelteren Vorschlaegen. */
+  image?: {
+    url: string
+    credit: string
+    provider: string
+    page: string
+    license: string | null
+  } | null
 }
 
 export interface Recipe {

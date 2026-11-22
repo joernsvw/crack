@@ -10,9 +10,10 @@ export const SUGGESTION_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'description', 'why', 'main_ingredients', 'adaptation'],
+        required: ['name', 'description', 'why', 'main_ingredients', 'adaptation', 'image_query'],
         properties: {
           name: { type: 'string' },
+          image_query: { type: 'string' },
           description: { type: 'string' },
           why: { type: 'string' },
           main_ingredients: { type: 'array', items: { type: 'string' } },
@@ -30,6 +31,7 @@ Regeln:
 - Description: ein kurzer Satz, was das Gericht ist.
 - Why: ein kurzer Satz, warum es zu diesem Haushalt passt. Beziehe dich konkret auf gut bewertete Rezepte oder das Profil.
 - Main_ingredients: die 3 bis 6 wichtigsten Zutaten, nur die Namen.
+- Image_query: 2 bis 4 englische Suchwörter für ein Foto des fertigen Gerichts in einer Bilddatenbank, zum Beispiel "dal makhani lentil curry".
 - Adaptation: ein kurzer Anpassungshinweis wie "geht auch ohne Tomaten", wenn eine Zutat von "Lieber vermeiden" nur nebensächlich vorkommt, sonst null.
 - Schlage nichts vor, das auf einer Zutat aus "Lieber vermeiden" aufbaut. Halte die angegebene Ernährungsweise ein.
 - Schlage nichts vor, das unter "Schon vorhanden" oder "Abgelehnt" steht oder dem stark ähnelt.
@@ -39,12 +41,56 @@ Regeln:
 export const LEFTOVERS_RULE = `
 Dieses Mal geht es um Reste: Die Gerichte sollen die unter "Vorhandene Zutaten" genannten Lebensmittel möglichst aufbrauchen und nur wenig Zusätzliches brauchen. Nenne in Why, welche der vorhandenen Zutaten verbraucht werden.`
 
+export interface SuggestionImage {
+  url: string
+  /** Fotograf oder Urheber, so wie die Quelle ihn nennt. */
+  credit: string
+  provider: 'Pexels' | 'Wikimedia Commons'
+  /** Seite des Fotos bei der Quelle, fuer die Namensnennung. */
+  page: string
+  license: string | null
+}
+
 export interface Suggestion {
   name: string
   description: string
   why: string
   main_ingredients: string[]
   adaptation: string | null
+  image_query?: string
+  image?: SuggestionImage | null
+}
+
+const stripHtml = (text: string) => text.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+
+/** Erstes brauchbares Foto aus der Pexels-Suche, oder null. */
+export function parsePexels(json: unknown): SuggestionImage | null {
+  const photo = (json as { photos?: { url?: string; photographer?: string; src?: Record<string, string> }[] })?.photos?.[0]
+  const url = photo?.src?.large ?? photo?.src?.medium
+  if (!photo || !url?.startsWith('https://') || !photo.url) return null
+  return { url, credit: photo.photographer?.trim() || 'Pexels', provider: 'Pexels', page: photo.url, license: null }
+}
+
+/** Erstes Foto (JPEG/PNG) aus der Commons-Suche, in der Reihenfolge der Trefferliste. */
+export function parseWikimedia(json: unknown): SuggestionImage | null {
+  type Page = {
+    index?: number
+    imageinfo?: { thumburl?: string; descriptionurl?: string; mime?: string; extmetadata?: Record<string, { value?: string }> }[]
+  }
+  const pages = Object.values((json as { query?: { pages?: Record<string, Page> } })?.query?.pages ?? {})
+  for (const page of pages.sort((a, b) => (a.index ?? 0) - (b.index ?? 0))) {
+    const info = page.imageinfo?.[0]
+    if (!info?.thumburl?.startsWith('https://') || !info.descriptionurl || !/image\/(jpeg|png)/.test(info.mime ?? '')) continue
+    const meta = info.extmetadata ?? {}
+    return {
+      url: info.thumburl,
+      credit: stripHtml(meta.Artist?.value ?? '').slice(0, 80) || 'Wikimedia Commons',
+      provider: 'Wikimedia Commons',
+      page: info.descriptionurl,
+      license: meta.LicenseShortName?.value?.trim() || null,
+    }
+  }
+  return null
 }
 
 const normalize = (text: string) => text.trim().toLowerCase()
@@ -77,6 +123,7 @@ export function cleanSuggestions(
       why: entry.why?.trim() ?? '',
       main_ingredients: main,
       adaptation: entry.adaptation?.trim() || null,
+      image_query: entry.image_query?.trim().slice(0, 80) || name,
     })
     if (result.length >= options.limit) break
   }

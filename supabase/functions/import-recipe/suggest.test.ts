@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanSuggestions, matchesTerm, parseLeftovers, type Suggestion } from './suggest'
+import { cleanSuggestions, matchesTerm, parseLeftovers, parsePexels, parseWikimedia, type Suggestion } from './suggest'
 
 const dish = (name: string, main: string[], extra: Partial<Suggestion> = {}): Suggestion => ({
   name,
@@ -50,6 +50,46 @@ describe('cleanSuggestions', () => {
 
   it('ohne Name kein Vorschlag', () => {
     expect(cleanSuggestions([dish(' ', ['Linsen'])], options)).toEqual([])
+  })
+})
+
+describe('parsePexels', () => {
+  it('nimmt das erste Foto mit Fotograf und Seite', () => {
+    const json = { photos: [{ url: 'https://www.pexels.com/photo/1/', photographer: ' Ana ', src: { large: 'https://images.pexels.com/1.jpg', medium: 'https://images.pexels.com/1m.jpg' } }] }
+    expect(parsePexels(json)).toEqual({ url: 'https://images.pexels.com/1.jpg', credit: 'Ana', provider: 'Pexels', page: 'https://www.pexels.com/photo/1/', license: null })
+  })
+  it('liefert null ohne Treffer oder bei unsicheren Adressen', () => {
+    expect(parsePexels({ photos: [] })).toBeNull()
+    expect(parsePexels(null)).toBeNull()
+    expect(parsePexels({ photos: [{ url: 'x', src: { large: 'http://unsicher.jpg' } }] })).toBeNull()
+  })
+})
+
+describe('parseWikimedia', () => {
+  const info = (mime: string, thumb = 'https://upload.wikimedia.org/a.jpg') => ({
+    thumburl: thumb,
+    descriptionurl: 'https://commons.wikimedia.org/wiki/File:A.jpg',
+    mime,
+    extmetadata: { Artist: { value: '<a href="x">Max <b>M.</b></a>' }, LicenseShortName: { value: 'CC BY-SA 4.0' } },
+  })
+
+  it('nimmt das erste Foto in Trefferreihenfolge und bereinigt den Urheber', () => {
+    const json = { query: { pages: { '9': { index: 2, imageinfo: [info('image/jpeg', 'https://upload.wikimedia.org/b.jpg')] }, '5': { index: 1, imageinfo: [info('image/jpeg')] } } } }
+    expect(parseWikimedia(json)).toEqual({
+      url: 'https://upload.wikimedia.org/a.jpg',
+      credit: 'Max M.',
+      provider: 'Wikimedia Commons',
+      page: 'https://commons.wikimedia.org/wiki/File:A.jpg',
+      license: 'CC BY-SA 4.0',
+    })
+  })
+  it('ueberspringt Grafiken und PDFs', () => {
+    const json = { query: { pages: { '1': { index: 1, imageinfo: [info('image/svg+xml')] }, '2': { index: 2, imageinfo: [info('application/pdf')] } } } }
+    expect(parseWikimedia(json)).toBeNull()
+  })
+  it('kommt mit leeren Antworten zurecht', () => {
+    expect(parseWikimedia({})).toBeNull()
+    expect(parseWikimedia(undefined)).toBeNull()
   })
 })
 

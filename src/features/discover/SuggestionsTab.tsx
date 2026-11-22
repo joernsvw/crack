@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { EmptyState, ErrorBox, Spinner } from '../../components/ui'
 import { formatRelativeDate } from '../../lib/format'
 import { requestSuggestions, useCachedSuggestions } from './data'
+import { DueSection } from './DueSection'
 import { SuggestionCard } from './SuggestionCard'
 
 export function SuggestionsTab({ householdId }: { householdId: string }) {
@@ -32,6 +33,8 @@ export function SuggestionsTab({ householdId }: { householdId: string }) {
 
   return (
     <div className="space-y-3">
+      <DueSection householdId={householdId} />
+      <h2 className="pt-2 font-bold">Neue Ideen</h2>
       {error && <ErrorBox message={error} onRetry={() => void refresh()} />}
       {requestError && <ErrorBox message={requestError} />}
       {savedId && (

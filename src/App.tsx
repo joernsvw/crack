@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { CenteredMessage, ErrorBox, Spinner } from './components/ui'
 import { TabLayout } from './components/TabLayout'
 import { UpdatePrompt } from './components/UpdatePrompt'
@@ -42,6 +43,7 @@ function StartRedirect() {
 
 function Protected() {
   const { state, loading, error, reload } = useHouseholdContext()
+  const location = useLocation()
 
   if (loading && !state) return <Spinner fullscreen />
   if (!state && error) {
@@ -54,6 +56,7 @@ function Protected() {
   if (!state) return <OnboardingPage />
 
   return (
+    <ErrorBoundary resetKey={location.pathname}>
     <Routes>
       <Route element={<TabLayout />}>
         <Route path="/einkauf" element={<ShoppingPage />} />
@@ -71,6 +74,7 @@ function Protected() {
       <Route path="/einstellungen" element={<SettingsPage />} />
       <Route path="*" element={<StartRedirect />} />
     </Routes>
+    </ErrorBoundary>
   )
 }
 

@@ -10,14 +10,28 @@ export function sameIngredient(a: string, b: string): boolean {
   return x.includes(y) || y.includes(x)
 }
 
-/** Keine erfundenen Direktlinks: Es sind reine Such-Adressen mit dem Gerichtsnamen. */
+/** "Dal Makhani!" wird zu "dalmakhani". Umlaute bleiben, TikTok-Hashtags koennen sie enthalten. */
+export function toHashtag(dish: string): string {
+  return dish.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * Keine erfundenen Direktlinks: Es sind reine Such-Adressen mit dem Gerichtsnamen.
+ * Die TikTok-App uebernimmt den Suchbegriff aus dem Link nicht immer. Deshalb wird er beim Antippen
+ * zusaetzlich kopiert, und der Hashtag-Link zeigt direkt passende Videos.
+ */
 export function searchLinks(dish: string) {
-  const query = encodeURIComponent(dish)
+  const query = `${dish} Rezept`
   return [
-    { label: 'TikTok', url: `https://www.tiktok.com/search?q=${query}` },
-    { label: 'Pinterest', url: `https://www.pinterest.com/search/pins/?q=${query}` },
-    { label: 'Google', url: `https://www.google.com/search?q=${encodeURIComponent(`${dish} Rezept`)}` },
+    { label: 'TikTok', url: `https://www.tiktok.com/search/video?q=${encodeURIComponent(query)}`, copy: query },
+    { label: 'Pinterest', url: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`, copy: query },
+    { label: 'Google', url: `https://www.google.com/search?q=${encodeURIComponent(query)}`, copy: null },
   ]
+}
+
+export function tiktokTagLink(dish: string): { label: string; url: string } | null {
+  const tag = toHashtag(dish)
+  return tag ? { label: `#${tag}`, url: `https://www.tiktok.com/tag/${encodeURIComponent(tag)}` } : null
 }
 
 export interface RecipeMatch {

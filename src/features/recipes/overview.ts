@@ -21,6 +21,31 @@ export function overdueDays(recipe: Recipe, now = Date.now()): number | null {
   return days > rhythm * OVERDUE_FACTOR ? days - rhythm : null
 }
 
+export interface DueRecipe {
+  recipe: Recipe
+  /** Wie weit der Wunschabstand ausgeschoepft ist: 1 = genau faellig, 2 = doppelt so lange her. */
+  dueRatio: number
+  daysSince: number | null
+}
+
+/**
+ * Eigene Gerichte, die mal wieder dran waeren: hohe Bewertung und lange nicht gekocht zuerst.
+ * Gut bewertete, aber noch nie gekochte Rezepte zaehlen als gerade faellig.
+ */
+export function dueRecipes(recipes: Recipe[], now = Date.now(), limit = 5): DueRecipe[] {
+  return recipes
+    .filter((recipe) => recipe.rating !== null && recipe.rating > 0 && !recipe.wheel_hidden)
+    .map((recipe) => {
+      const last = lastCooked(recipe)
+      const daysSince = last ? Math.floor((now - new Date(last).getTime()) / DAY_MS) : null
+      const rhythm = RHYTHM_DAYS[recipe.rating!]
+      return { recipe, daysSince, dueRatio: daysSince === null ? 1 : daysSince / rhythm }
+    })
+    .filter((entry) => entry.dueRatio >= 0.8)
+    .sort((a, b) => b.dueRatio - a.dueRatio || (b.recipe.rating ?? 0) - (a.recipe.rating ?? 0))
+    .slice(0, limit)
+}
+
 export function overviewList(
   recipes: Recipe[],
   options: { tab: OverviewTab; sort: OverviewSort; search: string },

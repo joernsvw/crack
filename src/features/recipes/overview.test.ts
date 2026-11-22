@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Recipe } from '../../lib/types'
-import { cookedAtFromDate, lastCooked, overdueDays, overviewList, todayInputValue } from './overview'
+import { cookedAtFromDate, dueRecipes, lastCooked, overdueDays, overviewList, todayInputValue } from './overview'
 
 const NOW = new Date('2026-11-22T12:00:00Z').getTime()
 const daysAgo = (days: number) => new Date(NOW - days * 86_400_000).toISOString()
@@ -72,6 +72,32 @@ describe('overviewList', () => {
   })
   it('sucht ohne Beachtung der Grossschreibung', () => {
     expect(titles({ tab: 'cooked', sort: 'name', search: 'BUR' })).toEqual(['Burger'])
+  })
+})
+
+describe('dueRecipes', () => {
+  it('stellt das am laengsten Ueberfaellige nach vorn', () => {
+    const list = [
+      recipe('Woechentlich, vor 2 Wochen', 5, [daysAgo(14)]),
+      recipe('Monatlich, vor 2 Monaten', 3, [daysAgo(60)]),
+      recipe('Woechentlich, gerade erst', 5, [daysAgo(2)]),
+    ]
+    expect(dueRecipes(list, NOW).map((entry) => entry.recipe.title)).toEqual(['Woechentlich, vor 2 Wochen', 'Monatlich, vor 2 Monaten'])
+  })
+
+  it('nimmt gut Bewertetes, das noch nie gekocht wurde, als faellig mit', () => {
+    const [entry] = dueRecipes([recipe('Neu', 4)], NOW)
+    expect(entry).toMatchObject({ dueRatio: 1, daysSince: null })
+  })
+
+  it('laesst Unbewertetes, "Nie wieder" und Ausgeblendetes weg', () => {
+    const hidden = { ...recipe('Versteckt', 5, [daysAgo(100)]), wheel_hidden: true }
+    expect(dueRecipes([recipe('Ohne', null, [daysAgo(100)]), recipe('Nie', 0, [daysAgo(100)]), hidden], NOW)).toEqual([])
+  })
+
+  it('bevorzugt bei gleichem Verzug die bessere Bewertung', () => {
+    const list = [recipe('Drei', 3), recipe('Fuenf', 5)]
+    expect(dueRecipes(list, NOW).map((entry) => entry.recipe.title)).toEqual(['Fuenf', 'Drei'])
   })
 })
 
