@@ -239,6 +239,12 @@ button {
 .tiptap > * + * {
   margin-top: 0.5rem;
 }
+.tiptap .note-image {
+  margin: 0.75rem 0;
+}
+.tiptap .note-image img {
+  -webkit-user-drag: none;
+}
 .tiptap h1 {
   font-size: 1.625rem;
   font-weight: 700;

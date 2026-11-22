@@ -90,7 +90,10 @@ Pexels vergibt derzeit keine neuen Schlüssel, Unsplash scheiterte an der Cloudf
 erster Versuch mit allen Teilen in einem Hintergrundprozess blieb hängen. 1 KI-Aufruf je Teil.
 Jede Kette bekommt eine Liste von Teilen (`queue`); fertige Teile stehen in `chunks_finished`, Angebote tragen `chunk`.
 Ein Neustart setzt nur fehlende Teile fort; `updated_at` als Bedingung lässt nur einen Start zählen. `ProspectWatchdog`
-(in TabLayout und auf der Angebote-Seite) setzt nach 5 Minuten ohne Fortschritt automatisch fort, solange jemand die App offen hat. Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
+(in TabLayout und auf der Angebote-Seite) setzt nach 5 Minuten ohne Fortschritt automatisch fort, solange jemand die App offen hat.
+Bilder in Notizen: TipTap-Knoten `noteImage` speichert nur den Pfad im privaten Bucket `note-images`
+(`<household>/<note>/<zufall>.jpg`), angezeigt über signierte Links (`useImageUrl(path, NOTE_BUCKET)`). Entfernte Bilder
+werden beim Verlassen nach 1 Stunde Karenz gelöscht, beim Löschen der Notiz sofort. Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
 als Test-Knopf ohne KI (`weekPlan.ts`, Kochtage je Handy gemerkt).
 
 Offen, jeweils noch zu beobachten:

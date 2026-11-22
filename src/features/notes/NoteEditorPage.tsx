@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bold, Heading1, List, ListChecks, Pin, PinOff, Trash2 } from 'lucide-react'
+import { Bold, Heading1, ImagePlus, List, ListChecks, LoaderCircle, Pin, PinOff, Trash2 } from 'lucide-react'
 import { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { EditorContent, useEditor, useEditorState, type Editor, type JSONContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -12,6 +12,8 @@ import { useRealtime } from '../../hooks/useRealtime'
 import { formatRelativeDate } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Note } from '../../lib/types'
+import { NoteImage } from './NoteImage'
+import { removeUnusedImages, uploadNoteImage } from './noteImages'
 import { deriveTitleAndPreview } from './noteText'
 
 const SAVE_DELAY = 700
@@ -20,6 +22,7 @@ const EXTENSIONS = [
   TaskList,
   TaskItem.configure({ nested: true }),
   Placeholder.configure({ placeholder: 'Schreib etwas …' }),
+  NoteImage,
 ]
 
 type SaveState = 'saved' | 'saving' | 'dirty' | 'error'
@@ -31,6 +34,8 @@ export function NoteEditorPage() {
   const [note, setNote] = useState<Note | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('saved')
+  const [uploading, setUploading] = useState(0)
+  const [imageError, setImageError] = useState<string | null>(null)
 
   const saveStateRef = useRef<SaveState>('saved')
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -57,8 +62,46 @@ export function NoteEditorPage() {
     updateSaveState(error ? 'error' : 'saved')
   }, [id])
 
+  // Bilder hochladen und an der Cursorstelle einfuegen. Aus der Galerie, der Kamera, per Einfuegen oder Ziehen.
+  const insertImages = useCallback(
+    async (files: File[]) => {
+      const images = files.filter((file) => file.type.startsWith('image/'))
+      if (!id || images.length === 0) return
+      setImageError(null)
+      setUploading((count) => count + images.length)
+      for (const file of images) {
+        try {
+          const path = await uploadNoteImage(householdId, id, file)
+          editorRef.current?.chain().focus().insertContent({ type: 'noteImage', attrs: { path } }).run()
+        } catch (err) {
+          setImageError((err as Error).message)
+        } finally {
+          setUploading((count) => count - 1)
+        }
+      }
+    },
+    [householdId, id],
+  )
+  const insertImagesRef = useRef(insertImages)
+  insertImagesRef.current = insertImages
+
   const editor = useEditor({
     extensions: EXTENSIONS,
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files ?? [])
+        if (!files.some((file) => file.type.startsWith('image/'))) return false
+        void insertImagesRef.current(files)
+        return true
+      },
+      handleDrop: (_view, event) => {
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        if (!files.some((file) => file.type.startsWith('image/'))) return false
+        event.preventDefault()
+        void insertImagesRef.current(files)
+        return true
+      },
+    },
     onUpdate: ({ editor: current }) => {
       contentRef.current = current.getJSON()
       updateSaveState('dirty')
@@ -121,10 +164,13 @@ export function NoteEditorPage() {
       deleted.current = true
       clearTimeout(timer.current)
       await supabase.from('notes').delete().eq('id', id)
-    } else if (saveStateRef.current !== 'saved') {
-      await save()
+      await removeUnusedImages(householdId, id, null, true)
+    } else {
+      if (saveStateRef.current !== 'saved') await save()
+      // Entfernte Bilder aus dem Speicher loeschen. Laeuft im Hintergrund, Fehler sind hier egal.
+      void removeUnusedImages(householdId, id, content).catch(() => undefined)
     }
-  }, [id, save])
+  }, [householdId, id, save])
 
   useEffect(() => () => void finish(), [finish])
 
@@ -144,6 +190,7 @@ export function NoteEditorPage() {
     deleted.current = true
     clearTimeout(timer.current)
     await supabase.from('notes').delete().eq('id', id)
+    await removeUnusedImages(householdId, id, null, true).catch(() => undefined)
     navigate('/notizen')
   }
 
@@ -183,19 +230,30 @@ export function NoteEditorPage() {
             <Trash2 size={20} />
           </button>
         </div>
-        {editor && <Toolbar editor={editor} />}
+        {editor && <Toolbar editor={editor} uploading={uploading > 0} onImages={(files) => void insertImages(files)} />}
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-10 pt-3">
         <p className={`mb-3 text-center text-xs ${saveState === 'error' ? 'text-danger' : 'text-muted'}`} role="status">
           {status}
         </p>
+        {uploading > 0 && (
+          <p className="mb-3 text-center text-sm text-muted" role="status">
+            {uploading === 1 ? 'Bild wird hochgeladen …' : `${uploading} Bilder werden hochgeladen …`}
+          </p>
+        )}
+        {imageError && (
+          <div className="mb-3">
+            <ErrorBox message={imageError} />
+          </div>
+        )}
         {note ? <EditorContent editor={editor} /> : <Spinner />}
       </main>
     </div>
   )
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, uploading, onImages }: { editor: Editor; uploading: boolean; onImages: (files: File[]) => void }) {
+  const fileInput = useRef<HTMLInputElement>(null)
   const active = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -230,6 +288,23 @@ function Toolbar({ editor }: { editor: Editor }) {
       {button('Fett', active.bold, () => editor.chain().focus().toggleBold().run(), <Bold size={20} />)}
       {button('Aufzählung', active.bullet, () => editor.chain().focus().toggleBulletList().run(), <List size={20} />)}
       {button('Checkliste', active.task, () => editor.chain().focus().toggleTaskList().run(), <ListChecks size={20} />)}
+      {button(
+        'Bild einfügen',
+        false,
+        () => fileInput.current?.click(),
+        uploading ? <LoaderCircle size={20} className="animate-spin" /> : <ImagePlus size={20} />,
+      )}
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(event) => {
+          onImages(Array.from(event.target.files ?? []))
+          event.target.value = ''
+        }}
+      />
     </div>
   )
 }

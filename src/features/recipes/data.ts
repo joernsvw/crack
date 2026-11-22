@@ -144,7 +144,7 @@ export async function uploadRecipeImage(householdId: string, recipeId: string, i
 }
 
 /** Der Bucket ist privat. Die signierte URL wird gemerkt, damit der Browser das Bild aus seinem Cache nehmen kann. */
-export function useImageUrl(path: string | null): string | null {
+export function useImageUrl(path: string | null, bucket = BUCKET): string | null {
   const [url, setUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export function useImageUrl(path: string | null): string | null {
       setUrl(null)
       return
     }
-    const cacheKey = `img:${path}`
+    const cacheKey = bucket === BUCKET ? `img:${path}` : `img:${bucket}:${path}`
     const cached = readCache<{ url: string; at: number }>(cacheKey)
     if (cached && Date.now() - cached.at < SIGNED_URL_RENEW_MS) {
       setUrl(cached.url)
@@ -160,7 +160,7 @@ export function useImageUrl(path: string | null): string | null {
     }
     let active = true
     void supabase.storage
-      .from(BUCKET)
+      .from(bucket)
       .createSignedUrl(path, SIGNED_URL_SECONDS)
       .then(({ data }) => {
         if (!data || !active) return

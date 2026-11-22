@@ -75,9 +75,45 @@ const server = http.createServer(async (req, res) => {
     return send(200, {})
   }
 
-  if (p.startsWith('/storage/v1/object/sign/')) return send(200, { signedURL: `/object/sign/x.png?t=1` })
+  // Hochgeladene Dateien merken und ueber den signierten Link wieder ausliefern, damit Bilder im Browser-Test sichtbar sind.
+  globalThis.files ??= new Map()
+  if (p.startsWith('/storage/v1/object/sign/')) {
+    const key = p.replace('/storage/v1/object/sign/', '')
+    if (req.method === 'GET' && globalThis.files.has(key)) {
+      const file = globalThis.files.get(key)
+      res.writeHead(200, { 'content-type': file.type })
+      return res.end(file.data)
+    }
+    return send(200, { signedURL: `/object/sign/${key}?token=t` })
+  }
+  if (p.startsWith('/storage/v1/object/list/')) {
+    const bucket = p.replace('/storage/v1/object/list/', '')
+    const prefix = `${bucket}/${body?.prefix ?? ''}/`
+    return send(200, [...globalThis.files.keys()].filter((k) => k.startsWith(prefix)).map((k) => ({ name: k.slice(prefix.length), created_at: globalThis.files.get(k).at })))
+  }
   if (p.startsWith('/storage/v1/object/')) {
-    if (req.method === 'DELETE') return send(200, [])
+    if (req.method === 'DELETE') {
+      const bucket = p.replace('/storage/v1/object/', '')
+      for (const name of body?.prefixes ?? []) globalThis.files.delete(`${bucket}/${name}`)
+      globalThis.lastDelete = body?.prefixes ?? []
+      return send(200, [])
+    }
+    if (req.method === 'POST' || req.method === 'PUT') {
+      let data = raw
+      let type = req.headers['content-type'] ?? 'application/octet-stream'
+      const boundary = /boundary=(.+)$/.exec(type)?.[1]
+      if (boundary) {
+        // supabase-js schickt Blobs als multipart/form-data: den Dateiteil herausschneiden.
+        // Der Teil mit eigenem Content-Type ist die Datei, davor steht z. B. cacheControl.
+        const text = raw.toString('latin1')
+        const fileHeader = text.search(/\r\ncontent-type: /i)
+        const start = text.indexOf('\r\n\r\n', fileHeader) + 4
+        const end = text.indexOf(`\r\n--${boundary}`, start)
+        type = /content-type: ([^\r\n]+)/i.exec(text.slice(fileHeader, start))?.[1] ?? 'application/octet-stream'
+        data = raw.subarray(start, end)
+      }
+      globalThis.files.set(p.replace('/storage/v1/object/', ''), { data, type, at: now() })
+    }
     return send(200, { Id: uuid(), Key: p.replace('/storage/v1/object/', '') })
   }
 
@@ -103,6 +139,7 @@ const server = http.createServer(async (req, res) => {
     Object.assign(pr, { status: 'ready', chunks_done: pr.chunks_total, offer_count: 4, chunk_paths: [], valid_from: pr.valid_from ?? '2026-11-23', valid_to: pr.valid_to ?? '2026-11-28' })
     return send(202, { started: true })
   }
+  if (p === '/__files') return send(200, { files: [...(globalThis.files?.keys() ?? [])], lastDelete: globalThis.lastDelete ?? null })
   if (p === '/__last_action') return send(200, globalThis.lastAction ?? null)
   if (p === '/functions/v1/import-recipe' && body?.action === 'screenshots') {
     await new Promise((r) => setTimeout(r, 300))

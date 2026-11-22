@@ -21,6 +21,16 @@ export function deriveTitleAndPreview(doc: DocNode): { title: string; preview: s
     }
     node.content?.forEach(walk)
   }
+  let images = 0
+  const count = (node: DocNode) => {
+    if (node.type === 'noteImage') images++
+    node.content?.forEach(count)
+  }
   walk(doc)
-  return { title: lines[0]?.slice(0, 200) ?? '', preview: lines.slice(1).join(' ').slice(0, 200) }
+  count(doc)
+  const imageText = images === 0 ? '' : images === 1 ? '1 Bild' : `${images} Bilder`
+  // Eine Notiz nur mit Bildern ist nicht leer und bekommt einen Titel, sonst wuerde sie beim Verlassen geloescht.
+  if (lines.length === 0) return { title: imageText, preview: '' }
+  const preview = [lines.slice(1).join(' '), imageText].filter(Boolean).join(' · ')
+  return { title: lines[0].slice(0, 200), preview: preview.slice(0, 200) }
 }

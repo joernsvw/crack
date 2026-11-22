@@ -81,6 +81,13 @@ ok('Fertige Teile gemerkt',(await as(A,()=>q('select chunks_finished from prospe
 await rej('Gueltigkeit muss Liste sein',()=>as(A,()=>q(`update prospects set validity='{"a":1}' where id=$1`,[pid])))
 await as(A,()=>q('delete from prospects where id=$1',[pid]))
 ok('Loeschen nimmt die Angebote mit',(await q('select count(*)::int n from offers')).rows[0].n===0)
+// Notizbilder
+await as(A,()=>q(`insert into storage.objects (bucket_id,name) values ('note-images',$1)`,[`${hid}/n1/a.jpg`]))
+ok('B sieht Notizbilder',(await as(B,()=>q(`select name from storage.objects where bucket_id='note-images'`))).rows.length===1)
+ok('C sieht fremde Notizbilder nicht',(await as(C,()=>q(`select name from storage.objects where bucket_id='note-images'`))).rows.length===0)
+await rej('C laedt nicht in fremde Notizen',()=>as(C,()=>q(`insert into storage.objects (bucket_id,name) values ('note-images',$1)`,[`${hid}/n1/b.jpg`])))
+ok('C loescht keine fremden Notizbilder',(await as(C,()=>q(`delete from storage.objects where bucket_id='note-images' returning name`))).rows.length===0)
+ok('B loescht Notizbilder',(await as(B,()=>q(`delete from storage.objects where bucket_id='note-images' returning name`))).rows.length===1)
 const no=(await q(`select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity`)).rows
 ok('RLS auf allen Tabellen',no.length===0)
 console.log(failed?`\n${failed} FEHLGESCHLAGEN`:'\nAlle Pruefungen bestanden'); process.exit(failed?1:0)
