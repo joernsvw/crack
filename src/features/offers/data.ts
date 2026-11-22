@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import type { Offer, Prospect } from '../../lib/types'
 import { invokeAiFunction } from '../recipes/importLink'
 
-export const STORES = ['Lidl', 'Netto', 'Marktkauf'] as const
+export const STORES = ['Lidl', 'Netto', 'Marktkauf', 'Rewe'] as const
 
 const MAX_PAGES = 120
 const MAX_FILE_BYTES = 150 * 1024 * 1024
