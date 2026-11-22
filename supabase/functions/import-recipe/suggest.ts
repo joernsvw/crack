@@ -45,7 +45,8 @@ export interface SuggestionImage {
   url: string
   /** Fotograf oder Urheber, so wie die Quelle ihn nennt. */
   credit: string
-  provider: 'Pexels' | 'Wikimedia Commons'
+  /** Woher das Foto stammt, so wie es auf dem Bild genannt wird, zum Beispiel Pexels, Flickr oder Wikimedia Commons. */
+  provider: string
   /** Seite des Fotos bei der Quelle, fuer die Namensnennung. */
   page: string
   license: string | null
@@ -69,6 +70,48 @@ export function parsePexels(json: unknown): SuggestionImage | null {
   const url = photo?.src?.large ?? photo?.src?.medium
   if (!photo || !url?.startsWith('https://') || !photo.url) return null
   return { url, credit: photo.photographer?.trim() || 'Pexels', provider: 'Pexels', page: photo.url, license: null }
+}
+
+const OPENVERSE_SOURCES: Record<string, string> = { flickr: 'Flickr', wikimedia: 'Wikimedia Commons' }
+// Sehr grosse Originale laden auf dem Handy zu lange, dann lieber das verkleinerte Bild von Openverse.
+const OPENVERSE_MAX_WIDTH = 1600
+
+/** "by-sa" und "2.0" werden zu "CC BY-SA 2.0", gemeinfreie Bilder heissen so. */
+export function openverseLicense(license?: string, version?: string): string | null {
+  if (!license) return null
+  if (license === 'cc0') return 'CC0'
+  if (license === 'pdm') return 'Gemeinfrei'
+  return `CC ${license.toUpperCase()}${version ? ` ${version}` : ''}`
+}
+
+/** Erstes brauchbares Foto aus der Openverse-Suche (frei lizenzierte Bilder, vor allem Flickr und Wikimedia), oder null. */
+export function parseOpenverse(json: unknown): SuggestionImage | null {
+  type Result = {
+    url?: string
+    thumbnail?: string
+    creator?: string | null
+    license?: string
+    license_version?: string
+    foreign_landing_url?: string
+    source?: string
+    width?: number | null
+    mature?: boolean
+  }
+  for (const result of (json as { results?: Result[] })?.results ?? []) {
+    if (result.mature || !result.foreign_landing_url?.startsWith('https://')) continue
+    const large = !result.width || result.width > OPENVERSE_MAX_WIDTH
+    const url = large ? result.thumbnail : result.url
+    if (!url?.startsWith('https://')) continue
+    const source = OPENVERSE_SOURCES[result.source ?? ''] ?? 'Openverse'
+    return {
+      url,
+      credit: result.creator?.trim().slice(0, 80) || source,
+      provider: source,
+      page: result.foreign_landing_url,
+      license: openverseLicense(result.license, result.license_version),
+    }
+  }
+  return null
 }
 
 /** Erstes Foto (JPEG/PNG) aus der Commons-Suche, in der Reihenfolge der Trefferliste. */

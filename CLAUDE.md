@@ -81,7 +81,8 @@ Fertig und online: Einkaufsliste mit Offline-Warteschlange, Notizen, Rezepte, Li
 Originalrezept, Blogs), Screenshot-Import, Anpassen mit KI, Bewertungen mit Anpassungen, Entdecken (Vorschläge, Reste,
 Geschmacksprofil), Zutaten auf die Einkaufsliste, Glücksrad, Umrechnung von Cups und Unzen.
 Gemeinsame Bewertung 0–5 Sterne mit Rhythmus (`recipes.rating`, `recipe_ratings` nur noch Altbestand), Übersicht
-„Gekocht & gespeichert“, Vorschläge mit Bildern (Pexels, sobald `PEXELS_API_KEY` gesetzt ist, sonst Wikimedia) und
+„Gekocht & gespeichert“, Vorschläge mit Bildern (Pexels, sobald `PEXELS_API_KEY` gesetzt ist, dann Openverse ohne Schlüssel, dann Wikimedia;
+Pexels vergibt derzeit keine neuen Schlüssel, Unsplash scheiterte an der Cloudflare-Prüfung) und
 „Mal wieder fällig“. Angebote (`/angebote`): Prospekt-PDFs hochladen, das Handy teilt sie mit pdf-lib in Stücke
 (max. 6 Seiten, 30 Teile), die Funktion liest sie mit `action: 'prospect'` im Hintergrund aus (`EdgeRuntime.waitUntil`,
 1 KI-Aufruf je Teil). Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan

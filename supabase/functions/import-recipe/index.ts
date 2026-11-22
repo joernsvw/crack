@@ -21,6 +21,7 @@ import {
   cleanSuggestions,
   LEFTOVERS_RULE,
   parseLeftovers,
+  parseOpenverse,
   parsePexels,
   parseWikimedia,
   SUGGEST_PROMPT,
@@ -552,6 +553,25 @@ async function searchPexels(query: string): Promise<SuggestionImage | null> {
   return response.ok ? parsePexels(await response.json()) : null
 }
 
+async function searchOpenverse(query: string): Promise<SuggestionImage | null> {
+  // Openverse verlangt alle Woerter. Findet "feta pasta baked tomatoes" nichts, klappt oft "feta pasta".
+  const words = query.split(/\s+/).filter(Boolean)
+  const queries = words.length > 2 ? [query, words.slice(0, 2).join(' ')] : [query]
+  for (const q of queries) {
+    const url = new URL('https://api.openverse.org/v1/images/')
+    url.searchParams.set('q', q)
+    url.searchParams.set('page_size', '5')
+    url.searchParams.set('category', 'photograph')
+    url.searchParams.set('mature', 'false')
+    // Ohne Schluessel erlaubt Openverse 20 Suchen pro Minute und 200 am Tag, das reicht fuer die Vorschlaege.
+    const response = await fetch(url, { headers: { 'User-Agent': WIKIMEDIA_UA }, signal: AbortSignal.timeout(IMAGE_SEARCH_TIMEOUT) })
+    if (!response.ok) return null
+    const image = parseOpenverse(await response.json())
+    if (image) return image
+  }
+  return null
+}
+
 async function searchWikimedia(query: string): Promise<SuggestionImage | null> {
   const url = new URL('https://commons.wikimedia.org/w/api.php')
   for (const [key, value] of Object.entries({
@@ -569,13 +589,13 @@ async function searchWikimedia(query: string): Promise<SuggestionImage | null> {
   return response.ok ? parseWikimedia(await response.json()) : null
 }
 
-/** Ein Foto je Vorschlag: zuerst Pexels, sonst Wikimedia Commons. Ohne Treffer zeigt die App einen Platzhalter. */
+/** Ein Foto je Vorschlag: zuerst Pexels (falls ein Schluessel da ist), dann Openverse, dann Wikimedia Commons. Ohne Treffer zeigt die App einen Platzhalter. */
 function withImages(suggestions: Suggestion[]): Promise<Suggestion[]> {
   return Promise.all(
     suggestions.map(async ({ image_query, ...suggestion }) => {
       const query = image_query || suggestion.name
       let image: SuggestionImage | null = null
-      for (const search of [searchPexels, searchWikimedia]) {
+      for (const search of [searchPexels, searchOpenverse, searchWikimedia]) {
         try {
           image = await search(query)
         } catch {

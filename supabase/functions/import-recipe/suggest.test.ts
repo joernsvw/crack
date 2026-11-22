@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanSuggestions, matchesTerm, parseLeftovers, parsePexels, parseWikimedia, type Suggestion } from './suggest'
+import { cleanSuggestions, matchesTerm, openverseLicense, parseLeftovers, parseOpenverse, parsePexels, parseWikimedia, type Suggestion } from './suggest'
 
 const dish = (name: string, main: string[], extra: Partial<Suggestion> = {}): Suggestion => ({
   name,
@@ -62,6 +62,49 @@ describe('parsePexels', () => {
     expect(parsePexels({ photos: [] })).toBeNull()
     expect(parsePexels(null)).toBeNull()
     expect(parsePexels({ photos: [{ url: 'x', src: { large: 'http://unsicher.jpg' } }] })).toBeNull()
+  })
+})
+
+describe('parseOpenverse', () => {
+  const flickr = {
+    url: 'https://live.staticflickr.com/1/2_b.jpg',
+    thumbnail: 'https://api.openverse.org/v1/images/a/thumb/',
+    creator: 'cyclonebill',
+    license: 'by-sa',
+    license_version: '2.0',
+    foreign_landing_url: 'https://www.flickr.com/photos/x/2',
+    source: 'flickr',
+    width: 1024,
+    mature: false,
+  }
+
+  it('nimmt das erste passende Foto mit Quelle und Lizenz', () => {
+    expect(parseOpenverse({ results: [flickr] })).toEqual({
+      url: 'https://live.staticflickr.com/1/2_b.jpg',
+      credit: 'cyclonebill',
+      provider: 'Flickr',
+      page: 'https://www.flickr.com/photos/x/2',
+      license: 'CC BY-SA 2.0',
+    })
+  })
+
+  it('nimmt bei riesigen Originalen das verkleinerte Bild und ueberspringt Ungeeignetes', () => {
+    const huge = { ...flickr, source: 'wikimedia', width: 3984, url: 'https://upload.wikimedia.org/x.jpg' }
+    const result = parseOpenverse({ results: [{ ...flickr, mature: true }, { ...flickr, url: 'http://unsicher.example/x.jpg' }, huge] })
+    expect(result?.url).toBe('https://api.openverse.org/v1/images/a/thumb/')
+    expect(result?.provider).toBe('Wikimedia Commons')
+  })
+
+  it('liefert null ohne Treffer', () => {
+    expect(parseOpenverse({ results: [] })).toBeNull()
+    expect(parseOpenverse(null)).toBeNull()
+  })
+
+  it('schreibt Lizenzen lesbar', () => {
+    expect(openverseLicense('cc0', '1.0')).toBe('CC0')
+    expect(openverseLicense('pdm')).toBe('Gemeinfrei')
+    expect(openverseLicense('by', '4.0')).toBe('CC BY 4.0')
+    expect(openverseLicense(undefined)).toBeNull()
   })
 })
 
