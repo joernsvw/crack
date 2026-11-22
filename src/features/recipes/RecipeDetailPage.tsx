@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, CheckCircle2, Clock, ExternalLink, Pencil, ShoppingCart, Trash2, Undo2, Users } from 'lucide-react'
+import { BookOpen, CalendarDays, CheckCircle2, Clock, ExternalLink, Pencil, ShoppingCart, Trash2, Undo2, Users } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, ErrorBox, PageHeader, Spinner } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
@@ -8,6 +8,7 @@ import { formatRelativeDate, isSafeUrl } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import type { Modification, Recipe } from '../../lib/types'
 import { AddToShoppingSheet } from './AddToShoppingSheet'
+import { CookDateSheet } from './CookDateSheet'
 import { BUCKET, useCategories, useImageUrl, useRecipes, useTags } from './data'
 import { RecipeAiEdit } from './RecipeAiEdit'
 import { StarsInput } from './Stars'
@@ -38,6 +39,7 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
   const [shoppingOpen, setShoppingOpen] = useState(false)
+  const [cookDateOpen, setCookDateOpen] = useState(false)
   const [addedCount, setAddedCount] = useState<number | null>(null)
 
   const category = categories?.find((candidate) => candidate.id === recipe.category_id)
@@ -142,13 +144,30 @@ function RecipeDetail({ recipe, refresh }: { recipe: Recipe; refresh: () => Prom
               </button>
             )}
           </div>
-          <button
-            className="btn btn-primary mt-3 w-full"
-            onClick={() => void run(supabase.from('cook_history').insert({ household_id: householdId, recipe_id: recipe.id }))}
-          >
-            <CheckCircle2 size={20} /> Heute gekocht
-          </button>
+          <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+            <button
+              className="btn btn-primary"
+              onClick={() => void run(supabase.from('cook_history').insert({ household_id: householdId, recipe_id: recipe.id }))}
+            >
+              <CheckCircle2 size={20} /> Heute gekocht
+            </button>
+            <button className="btn btn-soft" onClick={() => setCookDateOpen(true)}>
+              <CalendarDays size={18} aria-hidden /> Anderer Tag
+            </button>
+          </div>
         </section>
+        {cookDateOpen && (
+          <CookDateSheet
+            householdId={householdId}
+            recipeId={recipe.id}
+            title={recipe.title}
+            onClose={() => setCookDateOpen(false)}
+            onSaved={() => {
+              setCookDateOpen(false)
+              void refresh()
+            }}
+          />
+        )}
 
         <RatingSection recipe={recipe} run={run} />
 

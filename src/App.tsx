@@ -18,6 +18,7 @@ import { RecipeDetailPage } from './features/recipes/RecipeDetailPage'
 import { RecipeFormPage } from './features/recipes/RecipeFormPage'
 import { RecipeImportPage } from './features/recipes/RecipeImportPage'
 import { WheelPage } from './features/recipes/WheelPage'
+import { OverviewPage } from './features/recipes/OverviewPage'
 import { extractFirstUrl } from './features/recipes/importLink'
 
 /** Android "Teilen" oeffnet die App mit ?url=... oder ?text=... (Web Share Target im Manifest). */
@@ -63,6 +64,7 @@ function Protected() {
       <Route path="/rezepte/neu" element={<RecipeFormPage />} />
       <Route path="/rezepte/import" element={<RecipeImportPage />} />
       <Route path="/rezepte/rad" element={<WheelPage />} />
+      <Route path="/rezepte/uebersicht" element={<OverviewPage />} />
       <Route path="/rezepte/:id" element={<RecipeDetailPage />} />
       <Route path="/rezepte/:id/bearbeiten" element={<RecipeFormPage />} />
       <Route path="/notizen/:id" element={<NoteEditorPage />} />
