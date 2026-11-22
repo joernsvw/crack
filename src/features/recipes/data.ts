@@ -12,11 +12,11 @@ export function useRecipes(householdId: string) {
   return useLiveQuery<Recipe[]>({
     householdId,
     key: 'recipes',
-    tables: ['recipes', 'recipe_ingredients', 'recipe_tags', 'recipe_ratings', 'cook_history'],
+    tables: ['recipes', 'recipe_ingredients', 'recipe_tags', 'cook_history'],
     fetcher: async () => {
       const { data, error } = await supabase
         .from('recipes')
-        .select('*, recipe_ingredients(*), recipe_tags(tag_id), recipe_ratings(*), cook_history(id, cooked_at)')
+        .select('*, recipe_ingredients(*), recipe_tags(tag_id), cook_history(id, cooked_at)')
         .eq('household_id', householdId)
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -57,12 +57,6 @@ export function useTags(householdId: string) {
       return data as Tag[]
     },
   })
-}
-
-export function averageRating(recipe: Recipe): number | null {
-  const ratings = recipe.recipe_ratings
-  if (ratings.length === 0) return null
-  return ratings.reduce((sum, rating) => sum + rating.stars, 0) / ratings.length
 }
 
 export interface RecipeDraft {

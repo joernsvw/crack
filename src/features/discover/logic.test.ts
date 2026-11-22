@@ -13,18 +13,13 @@ const recipe = (title: string, ingredients: string[], stars: number[] = [], mods
   category_id: null,
   source_url: null,
   image_path: null,
+  rating: stars.length ? Math.round(stars.reduce((sum, value) => sum + value, 0) / stars.length) : null,
+  rating_note: null,
+  // Anpassungen mehrerer Kochabende landen alle am Rezept.
+  modifications: mods.flat(),
   created_at: '2026-01-01',
   recipe_ingredients: ingredients.map((name, sort_order) => ({ name, quantity: null, unit: null, sort_order })),
   recipe_tags: [],
-  recipe_ratings: (stars.length ? stars : mods.map(() => 3)).map((value, index) => ({
-    id: `r${index}`,
-    household_id: 'h',
-    recipe_id: title,
-    user_id: `u${index}`,
-    stars: value,
-    note: null,
-    modifications: mods[index],
-  })),
   cook_history: [],
 })
 

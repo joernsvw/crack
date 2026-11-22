@@ -52,16 +52,6 @@ export interface Modification {
   replacement?: string | null
 }
 
-export interface Rating {
-  id: string
-  household_id: string
-  recipe_id: string
-  user_id: string
-  stars: number
-  note: string | null
-  modifications?: Modification[]
-}
-
 export interface TasteProfile {
   household_id: string
   likes: string[]
@@ -90,10 +80,13 @@ export interface Recipe {
   source_url: string | null
   image_path: string | null
   wheel_hidden?: boolean
+  /** Gemeinsame Bewertung 0 bis 5, null = noch nicht bewertet. */
+  rating: number | null
+  rating_note: string | null
+  modifications: Modification[]
   created_at: string
   recipe_ingredients: Ingredient[]
   recipe_tags: { tag_id: string }[]
-  recipe_ratings: Rating[]
   cook_history: { id: string; cooked_at: string }[]
 }
 

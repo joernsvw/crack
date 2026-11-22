@@ -26,11 +26,10 @@ export function matchesWheelFilter(recipe: Recipe, filter: WheelFilter): boolean
   return filter.tagIds.every((id) => own.has(id))
 }
 
-/** Sterne zum Quadrat: 5 Sterne kommen viel oefter als 2. Unbewertete liegen im Mittelfeld. */
+/** Sterne zum Quadrat: 5 Sterne kommen viel oefter als 2. Unbewertete liegen im Mittelfeld, 0 Sterne nie. */
 export function wheelWeight(recipe: Recipe, recent: RecentMode, now = Date.now()): number {
-  const stars = recipe.recipe_ratings.map((rating) => rating.stars)
-  const average = stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : UNRATED_STARS
-  const base = average * average
+  const stars = recipe.rating ?? UNRATED_STARS
+  const base = stars * stars
   return recent === 'lower' && cookedRecently(recipe, now) ? base * RECENT_FACTOR : base
 }
 
@@ -44,7 +43,7 @@ export interface WheelEntry {
 /** Was tatsaechlich auf dem Rad landet. Die Groesse jedes Felds entspricht seiner Chance. */
 export function buildWheel(recipes: Recipe[], filter: WheelFilter, now = Date.now()): WheelEntry[] {
   const candidates = recipes
-    .filter((recipe) => matchesWheelFilter(recipe, filter) && !recipe.wheel_hidden)
+    .filter((recipe) => matchesWheelFilter(recipe, filter) && !recipe.wheel_hidden && recipe.rating !== 0)
     .filter((recipe) => filter.recent !== 'exclude' || !cookedRecently(recipe, now))
     .map((recipe) => ({ recipe, weight: wheelWeight(recipe, filter.recent, now) }))
   const total = candidates.reduce((sum, entry) => sum + entry.weight, 0)

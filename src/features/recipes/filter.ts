@@ -30,11 +30,7 @@ export function filterRecipes(recipes: Recipe[], filter: RecipeFilter): Recipe[]
       const own = new Set(recipe.recipe_tags.map((tag) => tag.tag_id))
       if (!filter.tagIds.every((id) => own.has(id))) return false
     }
-    if (filter.minStars > 0) {
-      const ratings = recipe.recipe_ratings
-      const average = ratings.length ? ratings.reduce((sum, rating) => sum + rating.stars, 0) / ratings.length : 0
-      if (average < filter.minStars) return false
-    }
+    if (filter.minStars > 0 && (recipe.rating ?? -1) < filter.minStars) return false
     if (ingredient && !recipe.recipe_ingredients.some((item) => item.name.toLowerCase().includes(ingredient))) {
       return false
     }

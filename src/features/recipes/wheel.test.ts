@@ -16,10 +16,13 @@ const recipe = (title: string, extra: Partial<Recipe> = {}, stars: number[] = []
   category_id: null,
   source_url: null,
   image_path: null,
+  // Mehrere Werte stehen fuer die frueheren Einzelbewertungen, gespeichert wird der gerundete Mittelwert.
+  rating: stars.length ? Math.round(stars.reduce((sum, value) => sum + value, 0) / stars.length) : null,
+  rating_note: null,
+  modifications: [],
   created_at: '2026-01-01',
   recipe_ingredients: [],
   recipe_tags: [],
-  recipe_ratings: stars.map((value, index) => ({ id: `${index}`, household_id: 'h', recipe_id: title, user_id: `u${index}`, stars: value, note: null })),
   cook_history: [],
   ...extra,
 })
@@ -66,6 +69,11 @@ describe('wheelWeight', () => {
 })
 
 describe('buildWheel', () => {
+  it('laesst "Nie wieder" weg, aber nicht Unbewertetes', () => {
+    const entries = buildWheel([recipe('A', {}, [0]), recipe('B')], ALL, NOW)
+    expect(entries.map((entry) => entry.recipe.title)).toEqual(['B'])
+  })
+
   it('laesst Ausgeblendetes weg', () => {
     const entries = buildWheel([recipe('A'), recipe('B', { wheel_hidden: true })], ALL, NOW)
     expect(entries.map((entry) => entry.recipe.title)).toEqual(['A'])

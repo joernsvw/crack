@@ -28,11 +28,9 @@ export interface RecipeMatch {
 
 /** Eigene Rezepte nach Uebereinstimmung mit den vorhandenen Zutaten, bei Gleichstand gewinnt die bessere Bewertung. */
 export function matchRecipes(recipes: Recipe[], available: string[], limit = 6): RecipeMatch[] {
-  const average = (recipe: Recipe) => {
-    const stars = recipe.recipe_ratings.map((rating) => rating.stars)
-    return stars.length ? stars.reduce((sum, value) => sum + value, 0) / stars.length : 0
-  }
+  const score = (recipe: Recipe) => recipe.rating ?? 0
   return recipes
+    .filter((recipe) => recipe.rating !== 0)
     .map((recipe) => {
       const matched = recipe.recipe_ingredients
         .filter((ingredient) => available.some((item) => sameIngredient(ingredient.name, item)))
@@ -41,7 +39,7 @@ export function matchRecipes(recipes: Recipe[], available: string[], limit = 6):
       return { recipe, matched, missing: total - matched.length, share: total ? matched.length / total : 0 }
     })
     .filter((entry) => entry.matched.length > 0)
-    .sort((a, b) => b.share - a.share || average(b.recipe) - average(a.recipe))
+    .sort((a, b) => b.share - a.share || score(b.recipe) - score(a.recipe))
     .slice(0, limit)
     .map(({ recipe, matched, missing }) => ({ recipe, matched, missing }))
 }
@@ -85,15 +83,13 @@ export interface ProfileHint {
 export function profileHints(recipes: Recipe[], profile: Pick<TasteProfile, 'likes' | 'avoids' | 'dismissed_hints'>): ProfileHint[] {
   const tally = new Map<string, { ingredient: string; removed: number; more: number }>()
   for (const recipe of recipes) {
-    for (const rating of recipe.recipe_ratings) {
-      for (const change of rating.modifications ?? []) {
-        const key = normalize(change.ingredient ?? '')
-        if (!key) continue
-        const entry = tally.get(key) ?? { ingredient: change.ingredient.trim(), removed: 0, more: 0 }
-        if (change.type === 'omitted' || change.type === 'replaced') entry.removed += 1
-        if (change.type === 'more') entry.more += 1
-        tally.set(key, entry)
-      }
+    for (const change of recipe.modifications ?? []) {
+      const key = normalize(change.ingredient ?? '')
+      if (!key) continue
+      const entry = tally.get(key) ?? { ingredient: change.ingredient.trim(), removed: 0, more: 0 }
+      if (change.type === 'omitted' || change.type === 'replaced') entry.removed += 1
+      if (change.type === 'more') entry.more += 1
+      tally.set(key, entry)
     }
   }
 

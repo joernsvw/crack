@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { EmptyState, ErrorBox, PageHeader, Spinner } from '../../components/ui'
 import { useHousehold } from '../../context/HouseholdContext'
 import type { Recipe } from '../../lib/types'
-import { averageRating, useCategories, useImageUrl, useRecipes, useTags } from './data'
+import { useCategories, useImageUrl, useRecipes, useTags } from './data'
 import { EMPTY_FILTER, filterRecipes, type RecipeFilter } from './filter'
 import { StarsDisplay } from './Stars'
 
@@ -170,7 +170,6 @@ export function RecipesPage() {
 
 function RecipeCard({ recipe }: { recipe: Recipe }) {
   const imageUrl = useImageUrl(recipe.image_path)
-  const average = averageRating(recipe)
 
   return (
     <Link to={`/rezepte/${recipe.id}`} className="card fade-in flex flex-col overflow-hidden">
@@ -180,7 +179,7 @@ function RecipeCard({ recipe }: { recipe: Recipe }) {
       <div className="flex flex-1 flex-col gap-1 p-3">
         <h2 className="line-clamp-2 font-semibold leading-snug">{recipe.title}</h2>
         <div className="mt-auto flex items-center justify-between gap-1 pt-1 text-xs text-muted">
-          {average !== null ? <StarsDisplay value={average} size={13} /> : <span>Noch nicht bewertet</span>}
+          <StarsDisplay value={recipe.rating} size={13} />
           {recipe.total_minutes !== null && (
             <span className="flex shrink-0 items-center gap-0.5">
               <Clock size={12} aria-hidden />

@@ -6,11 +6,11 @@ import { useAuth } from '../../context/AuthContext'
 import { useHousehold } from '../../context/HouseholdContext'
 import { formatRelativeDate, isSafeUrl } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
-import type { Modification, Rating, Recipe } from '../../lib/types'
+import type { Modification, Recipe } from '../../lib/types'
 import { AddToShoppingSheet } from './AddToShoppingSheet'
-import { averageRating, BUCKET, useCategories, useImageUrl, useRecipes, useTags } from './data'
+import { BUCKET, useCategories, useImageUrl, useRecipes, useTags } from './data'
 import { RecipeAiEdit } from './RecipeAiEdit'
-import { StarsDisplay, StarsInput } from './Stars'
+import { StarsInput } from './Stars'
 
 export function RecipeDetailPage() {
   const { id } = useParams()
@@ -237,18 +237,16 @@ const MODIFICATION_LABELS: Record<Modification['type'], string> = {
 /** Was ihr beim Kochen geaendert habt. Fliesst automatisch ins Geschmacksprofil unter Entdecken ein. */
 function ModificationEditor({
   recipe,
-  rating,
   run,
 }: {
   recipe: Recipe
-  rating: Rating
   run: (action: PromiseLike<{ error: { message: string } | null }>) => Promise<boolean>
 }) {
-  const [items, setItems] = useState<Modification[]>(rating.modifications ?? [])
+  const [items, setItems] = useState<Modification[]>(recipe.modifications ?? [])
 
   const save = (next: Modification[]) => {
     setItems(next)
-    void run(supabase.from('recipe_ratings').update({ modifications: next }).eq('id', rating.id))
+    void run(supabase.from('recipes').update({ modifications: next }).eq('id', recipe.id))
   }
 
   const setType = (ingredient: string, type: Modification['type'] | '') => {
@@ -309,64 +307,35 @@ function RatingSection({
   recipe: Recipe
   run: (action: PromiseLike<{ error: { message: string } | null }>) => Promise<boolean>
 }) {
-  const { user } = useAuth()
-  const { householdId, memberName } = useHousehold()
-  const own = recipe.recipe_ratings.find((rating) => rating.user_id === user?.id)
-  const others = recipe.recipe_ratings.filter((rating) => rating.user_id !== user?.id)
-  const average = averageRating(recipe)
-  const [note, setNote] = useState(own?.note ?? '')
+  const [note, setNote] = useState(recipe.rating_note ?? '')
 
   useEffect(() => {
-    setNote(own?.note ?? '')
-  }, [own?.note])
+    setNote(recipe.rating_note ?? '')
+  }, [recipe.rating_note])
 
-  const rate = (stars: number) =>
-    run(
-      supabase
-        .from('recipe_ratings')
-        .upsert({ household_id: householdId, recipe_id: recipe.id, user_id: user!.id, stars, note: note.trim() || null }, { onConflict: 'recipe_id,user_id' }),
-    )
+  const rate = (rating: number | null) => run(supabase.from('recipes').update({ rating }).eq('id', recipe.id))
 
   const saveNote = () => {
     const trimmed = note.trim() || null
-    if (own && trimmed !== own.note) void run(supabase.from('recipe_ratings').update({ note: trimmed }).eq('id', own.id))
+    if (trimmed !== recipe.rating_note) void run(supabase.from('recipes').update({ rating_note: trimmed }).eq('id', recipe.id))
   }
 
   return (
     <section className="card p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Bewertung</h2>
-        {average !== null && (
-          <span className="flex items-center gap-1.5 text-sm text-muted">
-            <StarsDisplay value={average} />
-            {average.toFixed(1).replace('.', ',')}
-          </span>
-        )}
-      </div>
+      <h2 className="font-semibold">Wie oft wollt ihr das essen?</h2>
       <div className="mt-1">
-        <StarsInput value={own?.stars ?? 0} onChange={(stars) => void rate(stars)} />
+        <StarsInput value={recipe.rating} onChange={(rating) => void rate(rating)} />
       </div>
-      {own && (
-        <textarea
-          className="input mt-2"
-          rows={2}
-          placeholder="Notiz, z. B. „Beim nächsten Mal mehr Knoblauch“"
-          aria-label="Notiz zur Bewertung"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          onBlur={saveNote}
-        />
-      )}
-      {own && recipe.recipe_ingredients.length > 0 && <ModificationEditor recipe={recipe} rating={own} run={run} />}
-      {others.map((rating) => (
-        <div key={rating.id} className="mt-3 border-t border-line pt-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="font-medium">{memberName(rating.user_id) ?? 'Andere Person'}</span>
-            <StarsDisplay value={rating.stars} />
-          </div>
-          {rating.note && <p className="mt-1 text-muted">{rating.note}</p>}
-        </div>
-      ))}
+      <textarea
+        className="input mt-2"
+        rows={2}
+        placeholder="Notiz, z. B. „Beim nächsten Mal mehr Knoblauch“"
+        aria-label="Notiz zur Bewertung"
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        onBlur={saveNote}
+      />
+      {recipe.recipe_ingredients.length > 0 && <ModificationEditor recipe={recipe} run={run} />}
     </section>
   )
 }

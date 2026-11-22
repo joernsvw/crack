@@ -541,7 +541,7 @@ async function proposeSuggestions(
     supabase.from('taste_profile').select('likes, avoids, diet').eq('household_id', householdId).maybeSingle(),
     supabase
       .from('recipes')
-      .select('title, categories(name), recipe_ratings(stars), recipe_tags(tags(name))')
+      .select('title, rating, categories(name), recipe_tags(tags(name))')
       .eq('household_id', householdId),
     supabase.from('suggestion_feedback').select('name, verdict').eq('household_id', householdId).limit(200),
   ])
@@ -549,17 +549,20 @@ async function proposeSuggestions(
   const avoids: string[] = profile?.avoids ?? []
   const favorites = (recipes ?? [])
     .map((recipe) => {
-      const stars = recipe.recipe_ratings.map((rating: { stars: number }) => rating.stars)
-      const average = stars.length ? stars.reduce((sum: number, value: number) => sum + value, 0) / stars.length : 0
       const category = (recipe.categories as unknown as { name: string } | null)?.name
       const tags = (recipe.recipe_tags as unknown as { tags: { name: string } | null }[]).flatMap((link) => link.tags?.name ?? [])
-      return { title: recipe.title, average, category, tags }
+      return { title: recipe.title, rating: (recipe.rating as number | null) ?? 0, category, tags }
     })
-    .filter((recipe) => recipe.average >= 4)
-    .sort((a, b) => b.average - a.average)
+    .filter((recipe) => recipe.rating >= 4)
+    .sort((a, b) => b.rating - a.rating)
     .slice(0, 30)
   const known = (recipes ?? []).map((recipe) => recipe.title)
-  const dismissed = (feedback ?? []).filter((entry) => entry.verdict === 'dismissed').map((entry) => entry.name)
+  // "Nie wieder" ist ein deutliches Signal, aehnliche Gerichte nicht mehr vorzuschlagen.
+  const neverAgain = (recipes ?? []).filter((recipe) => recipe.rating === 0).map((recipe) => recipe.title)
+  const dismissed = [
+    ...(feedback ?? []).filter((entry) => entry.verdict === 'dismissed').map((entry) => entry.name),
+    ...neverAgain,
+  ]
   const excluded = [...known, ...(feedback ?? []).map((entry) => entry.name)]
 
   const { data: allowed, error: limitError } = await supabase.rpc('consume_ai_call')
@@ -575,7 +578,7 @@ async function proposeSuggestions(
         'Mögen wir gern': profile?.likes ?? [],
         'Lieber vermeiden': avoids,
         'Ernährungsweise': profile?.diet ?? null,
-        'Gut bewertet': favorites.map(({ average: _average, ...rest }) => rest),
+        'Gut bewertet': favorites.map(({ rating: _rating, ...rest }) => rest),
         'Schon vorhanden': known.slice(0, 100),
         'Abgelehnt': dismissed.slice(0, 100),
         ...(action === 'leftovers' ? { 'Vorhandene Zutaten': leftovers } : {}),

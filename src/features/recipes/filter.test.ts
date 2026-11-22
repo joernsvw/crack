@@ -13,20 +13,20 @@ const recipe = (title: string, extra: Partial<Recipe> = {}): Recipe => ({
   category_id: null,
   source_url: null,
   image_path: null,
+  rating: null,
+  rating_note: null,
+  modifications: [],
   created_at: '2026-01-01',
   recipe_ingredients: [],
   recipe_tags: [],
-  recipe_ratings: [],
   cook_history: [],
   ...extra,
 })
 
-const rating = (stars: number) => ({ id: 'r', household_id: 'h', recipe_id: 'x', user_id: 'u', stars, note: null })
-
 const pasta = recipe('Pasta Pesto', {
   category_id: 'abend',
   recipe_tags: [{ tag_id: 'schnell' }, { tag_id: 'veggie' }],
-  recipe_ratings: [rating(5), rating(4)],
+  rating: 4,
   recipe_ingredients: [{ name: 'Basilikum', quantity: null, unit: null, sort_order: 0 }],
   cook_history: [{ id: 'c', cooked_at: '2026-01-02' }],
 })
@@ -43,9 +43,14 @@ describe('filterRecipes', () => {
     expect(titles({ tagIds: ['schnell', 'veggie'] })).toEqual(['Pasta Pesto'])
     expect(titles({ tagIds: ['schnell', 'gaeste'] })).toEqual([])
   })
-  it('nutzt den Durchschnitt fuer die Mindestbewertung', () => {
+  it('nutzt die gemeinsame Bewertung fuer die Mindestbewertung', () => {
     expect(titles({ minStars: 4 })).toEqual(['Pasta Pesto'])
     expect(titles({ minStars: 5 })).toEqual([])
+  })
+  it('laesst Unbewertetes und "Nie wieder" bei einer Mindestbewertung weg', () => {
+    const never = recipe('Nie', { rating: 0 })
+    expect(filterRecipes([never, kuchen], { ...EMPTY_FILTER, minStars: 3 })).toEqual([])
+    expect(filterRecipes([never], EMPTY_FILTER)).toHaveLength(1)
   })
   it('findet Rezepte ueber Zutaten', () => expect(titles({ ingredient: 'basil' })).toEqual(['Pasta Pesto']))
   it('zeigt nur noch nicht Gekochtes', () => expect(titles({ notCooked: true })).toEqual(['Apfelkuchen']))
