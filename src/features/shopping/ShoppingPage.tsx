@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { Check, ChevronDown, CloudOff, Plus, ShoppingCart, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, CloudOff, Plus, ShoppingCart, Tag, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { EmptyState, ErrorBox, MemberInitial, PageHeader, Sheet, Spinner } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useHousehold } from '../../context/HouseholdContext'
@@ -83,7 +84,15 @@ export function ShoppingPage() {
 
   return (
     <>
-      <PageHeader title="Einkauf" settings />
+      <PageHeader
+        title="Einkauf"
+        settings
+        actions={
+          <Link to="/angebote" className="btn btn-soft h-10 !px-3 text-sm">
+            <Tag size={16} aria-hidden /> Angebote
+          </Link>
+        }
+      />
       <main className="mx-auto max-w-2xl px-4">
         <form className="flex items-start gap-2" onSubmit={submit}>
           <textarea

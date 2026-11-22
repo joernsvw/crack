@@ -55,6 +55,23 @@ await as(A,()=>q(`insert into recipe_ratings (household_id,recipe_id,stars) valu
 await as(A,()=>q(`update recipe_ratings set modifications='[{"ingredient":"Tomaten","type":"omitted"}]' where recipe_id=$1`,[rid]))
 ok('Anpassung gespeichert',(await as(B,()=>q('select modifications from recipe_ratings'))).rows[0].modifications[0].type==='omitted')
 await rej('Anpassungen muessen Liste sein',()=>as(A,()=>q(`update recipe_ratings set modifications='{"a":1}'`)))
+// Prospekte und Angebote
+const pid='30000000-0000-0000-0000-000000000001'
+await as(A,()=>q(`insert into prospects (id,household_id,store) values ($1,$2,'Lidl')`,[pid,hid]))
+await as(A,()=>q(`insert into offers (household_id,prospect_id,store,name,price) values ($1,$2,'Lidl','Tomaten',1.29)`,[hid,pid]))
+ok('B sieht Angebote von A',(await as(B,()=>q('select name from offers'))).rows[0]?.name==='Tomaten')
+ok('C sieht fremde Prospekte nicht',(await as(C,()=>q('select * from prospects'))).rows.length===0)
+ok('C sieht fremde Angebote nicht',(await as(C,()=>q('select * from offers'))).rows.length===0)
+await rej('C legt kein Angebot in fremden Prospekt',()=>as(C,()=>q(`insert into offers (household_id,prospect_id,store,name,price) values ($1,$2,'Lidl','X',1)`,[hC,pid])))
+await rej('anon liest keine Angebote',()=>as(null,()=>q('select * from offers')))
+await rej('Kein negativer Preis',()=>as(A,()=>q(`insert into offers (household_id,prospect_id,store,name,price) values ($1,$2,'Lidl','X',-1)`,[hid,pid])))
+await rej('Unbekannter Status',()=>as(A,()=>q(`update prospects set status='fertig' where id=$1`,[pid])))
+await as(A,()=>q(`insert into storage.objects (bucket_id,name) values ('prospects',$1)`,[`${hid}/${pid}/teil-001.pdf`]))
+ok('B sieht die PDF-Teile',(await as(B,()=>q(`select name from storage.objects where bucket_id='prospects'`))).rows.length===1)
+ok('C sieht fremde PDF-Teile nicht',(await as(C,()=>q(`select name from storage.objects where bucket_id='prospects'`))).rows.length===0)
+await rej('C laedt nicht in fremden Ordner',()=>as(C,()=>q(`insert into storage.objects (bucket_id,name) values ('prospects',$1)`,[`${hid}/x/teil-001.pdf`])))
+await as(A,()=>q('delete from prospects where id=$1',[pid]))
+ok('Loeschen nimmt die Angebote mit',(await q('select count(*)::int n from offers')).rows[0].n===0)
 const no=(await q(`select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity`)).rows
 ok('RLS auf allen Tabellen',no.length===0)
 console.log(failed?`\n${failed} FEHLGESCHLAGEN`:'\nAlle Pruefungen bestanden'); process.exit(failed?1:0)

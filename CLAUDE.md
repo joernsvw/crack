@@ -80,11 +80,23 @@ npm.cmd test
 Fertig und online: Einkaufsliste mit Offline-Warteschlange, Notizen, Rezepte, Link-Import (TikTok, Pinterest samt
 Originalrezept, Blogs), Screenshot-Import, Anpassen mit KI, Bewertungen mit Anpassungen, Entdecken (Vorschläge, Reste,
 Geschmacksprofil), Zutaten auf die Einkaufsliste, Glücksrad, Umrechnung von Cups und Unzen.
+Gemeinsame Bewertung 0–5 Sterne mit Rhythmus (`recipes.rating`, `recipe_ratings` nur noch Altbestand), Übersicht
+„Gekocht & gespeichert“, Vorschläge mit Bildern (Pexels, sobald `PEXELS_API_KEY` gesetzt ist, sonst Wikimedia) und
+„Mal wieder fällig“. Angebote (`/angebote`): Prospekt-PDFs hochladen, das Handy teilt sie mit pdf-lib in Stücke
+(max. 6 Seiten, 30 Teile), die Funktion liest sie mit `action: 'prospect'` im Hintergrund aus (`EdgeRuntime.waitUntil`,
+1 KI-Aufruf je Teil). Abgleich mit gekochten Rezepten und Einkaufsliste in `src/features/offers/match.ts`, Wochenplan
+als Test-Knopf ohne KI (`weekPlan.ts`, Kochtage je Handy gemerkt).
 
 Offen, jeweils noch zu beobachten:
 - Am iPhone kam bei einem TikTok-Link einmal „0“ heraus. Vermutete Ursache behoben (leere Seite ging an die KI, keine
   Wiederholungen), aber nicht am iPhone bestätigt. Die Funktion protokolliert seitdem Zahlen je Import.
 - Wie gut die KI Cups schätzt, ist mit echten Rezepten noch nicht geprüft.
+- Prospekte: Qualität, Dauer und Kosten (geschätzt 0,50–1 € je Prospekt) mit echten PDFs noch nicht geprüft. Ob das
+  Auslesen im Hintergrund in das Zeitlimit des Gratis-Plans passt, ebenfalls nicht.
+- marktguru: Die AGB verbieten automatisches Auslesen. Der Besitzer hat per E-Mail um Erlaubnis gefragt, Antwort offen.
+  Bis dahin nur PDF-Upload, kein Abruf von marktguru.
+- TikTok und Pinterest übernehmen den Suchbegriff aus Links in der App nicht zuverlässig. Workaround: Begriff wird in die
+  Zwischenablage kopiert. In den nativen Apps nicht bestätigt.
 
 Bewusste Entscheidungen, die nicht neu aufgerollt werden sollten:
 - **Login bleibt** und läuft nur über E-Mail und Passwort. Die Registrierung ist gesperrt, es gibt keine Einladungslinks.

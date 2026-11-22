@@ -28,6 +28,14 @@ import {
   type Suggestion,
   type SuggestionImage,
 } from './suggest.ts'
+import {
+  mapLimit,
+  normalizeOffers,
+  pickValidity,
+  PROSPECT_SCHEMA,
+  prospectPrompt,
+  type ProspectChunkResult,
+} from './prospect.ts'
 
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-opus-5-5'
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'https://joernsvw.github.io,http://localhost:5173').split(',')
@@ -580,6 +588,104 @@ function withImages(suggestions: Suggestion[]): Promise<Suggestion[]> {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Prospekte
+// ---------------------------------------------------------------------------
+
+const PROSPECT_PARALLEL = 3
+/** Abgelaufene Prospekte bleiben noch zwei Wochen sichtbar, dann werden sie mit ihren Angeboten geloescht. */
+const PROSPECT_KEEP_DAYS = 14
+const PROSPECT_MAX_CHUNKS = 30
+
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined
+
+interface ProspectRow {
+  id: string
+  store: string
+  valid_from: string | null
+  valid_to: string | null
+  chunk_paths: string[]
+}
+
+async function readProspect(supabase: SupabaseClient, householdId: string, prospect: ProspectRow) {
+  const today = new Date().toISOString().slice(0, 10)
+  const update = (patch: Record<string, unknown>) => supabase.from('prospects').update(patch).eq('id', prospect.id)
+  await update({ status: 'processing', error: null, chunks_done: 0, chunks_total: prospect.chunk_paths.length })
+
+  try {
+    let done = 0
+    const results = await mapLimit(prospect.chunk_paths, PROSPECT_PARALLEL, async (path) => {
+      const { data: allowed, error: limitError } = await supabase.rpc('consume_ai_call')
+      if (limitError) throw limitError
+      if (!allowed) throw new UserError('Das Tageslimit für KI-Aufrufe ist erreicht. Lies den Prospekt morgen erneut aus.', 429)
+      const { data: file, error: downloadError } = await supabase.storage.from('prospects').download(path)
+      if (downloadError || !file) throw new UserError('Ein Teil des Prospekts konnte nicht geladen werden.', 500)
+      const result = await askClaude<ProspectChunkResult>(
+        prospectPrompt(prospect.store, today),
+        [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: toBase64(new Uint8Array(await file.arrayBuffer())) } },
+          { type: 'text', text: 'Lies alle passenden Angebote auf diesen Seiten aus.' },
+        ],
+        PROSPECT_SCHEMA,
+      )
+      done += 1
+      await update({ chunks_done: done })
+      return result
+    })
+
+    const detected = pickValidity(results)
+    const validFrom = prospect.valid_from ?? detected.valid_from
+    const validTo = prospect.valid_to ?? detected.valid_to
+    const offers = normalizeOffers(results).map((offer) => ({
+      ...offer,
+      household_id: householdId,
+      prospect_id: prospect.id,
+      store: prospect.store,
+    }))
+
+    // Erneutes Auslesen ersetzt die bisherigen Angebote dieses Prospekts.
+    await supabase.from('offers').delete().eq('prospect_id', prospect.id)
+    for (let index = 0; index < offers.length; index += 200) {
+      const { error } = await supabase.from('offers').insert(offers.slice(index, index + 200))
+      if (error) throw error
+    }
+    await update({ status: 'ready', offer_count: offers.length, valid_from: validFrom, valid_to: validTo, chunk_paths: [] })
+    await supabase.storage.from('prospects').remove(prospect.chunk_paths)
+
+    const cutoff = new Date(Date.now() - PROSPECT_KEEP_DAYS * 86_400_000).toISOString().slice(0, 10)
+    await supabase.from('prospects').delete().eq('household_id', householdId).lt('valid_to', cutoff)
+    console.log('Prospekt', { store: prospect.store, chunks: prospect.chunk_paths.length, offers: offers.length })
+  } catch (error) {
+    const message = error instanceof UserError
+      ? error.message
+      : describeAiError(error)?.message ?? 'Der Prospekt konnte nicht ausgelesen werden. Versuche es noch einmal.'
+    console.error('Prospekt fehlgeschlagen:', (error as Error).message)
+    await update({ status: 'error', error: message })
+  }
+}
+
+/** Startet das Auslesen und antwortet sofort. Die App sieht den Fortschritt live, man muss sie nicht offen lassen. */
+async function startProspect(supabase: SupabaseClient, householdId: string, prospectId: unknown) {
+  if (typeof prospectId !== 'string') throw new UserError('Diesen Prospekt gibt es nicht.', 400)
+  const { data: prospect } = await supabase
+    .from('prospects')
+    .select('id, store, valid_from, valid_to, chunk_paths, status')
+    .eq('id', prospectId)
+    .eq('household_id', householdId)
+    .maybeSingle()
+  if (!prospect) throw new UserError('Diesen Prospekt gibt es nicht.', 404)
+  if (prospect.status === 'processing') throw new UserError('Dieser Prospekt wird gerade schon ausgelesen.', 409)
+  if (!prospect.chunk_paths?.length) throw new UserError('Zu diesem Prospekt gibt es keine Datei mehr. Lade ihn bitte neu hoch.', 400)
+  // Nur die eigenen Teile dieses Prospekts, und nicht mehr, als das Tageslimit sinnvoll erlaubt.
+  const prefix = `${householdId}/${prospect.id}/`
+  if (prospect.chunk_paths.some((path: string) => !path.startsWith(prefix) || path.includes('..'))) throw new UserError('Diesen Prospekt gibt es nicht.', 400)
+  if (prospect.chunk_paths.length > PROSPECT_MAX_CHUNKS) throw new UserError('Der Prospekt ist zu groß. Lade bitte nur einen Teil hoch.', 400)
+
+  const job = readProspect(supabase, householdId, prospect as ProspectRow)
+  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(job)
+  else await job
+}
+
 /** Neue Gerichte aus Bewertungen und Profil. Nur der normale Vorschlag wird gemerkt, Reste sind jedes Mal anders. */
 async function proposeSuggestions(
   supabase: SupabaseClient,
@@ -682,6 +788,11 @@ Deno.serve(async (request) => {
 
     if (!Deno.env.get('ANTHROPIC_API_KEY')) {
       return reply(503, { error: 'Der KI-Schlüssel ist noch nicht eingerichtet.' })
+    }
+
+    if (body?.action === 'prospect') {
+      await startProspect(supabase, member.household_id, body.prospect_id)
+      return reply(202, { started: true })
     }
 
     if (body?.action === 'suggest' || body?.action === 'leftovers') {

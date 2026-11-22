@@ -52,6 +52,38 @@ export interface Modification {
   replacement?: string | null
 }
 
+export interface Prospect {
+  id: string
+  household_id: string
+  store: string
+  file_name: string | null
+  valid_from: string | null
+  valid_to: string | null
+  status: 'uploaded' | 'processing' | 'ready' | 'error'
+  error: string | null
+  chunks_total: number
+  chunks_done: number
+  offer_count: number
+  created_at: string
+}
+
+export interface Offer {
+  id: string
+  household_id: string
+  prospect_id: string
+  store: string
+  name: string
+  brand: string | null
+  quantity: string | null
+  price: number
+  original_price: number | null
+  base_price: string | null
+  condition: string | null
+  valid_from: string | null
+  valid_to: string | null
+  page: number | null
+}
+
 export interface TasteProfile {
   household_id: string
   likes: string[]

@@ -5,7 +5,7 @@ import { randomUUID as uuid } from 'node:crypto'
 const USER = { id: '00000000-0000-0000-0000-00000000000a', email: 'test@example.test', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' }
 const OTHER = '00000000-0000-0000-0000-00000000000b'
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
-const db = { taste_profile: [], suggestion_cache: [], suggestion_feedback: [], households: [], household_members: [], shopping_items: [], categories: [], tags: [], recipes: [], recipe_ingredients: [], recipe_tags: [], recipe_ratings: [], cook_history: [], notes: [] }
+const db = { taste_profile: [], suggestion_cache: [], suggestion_feedback: [], households: [], household_members: [], shopping_items: [], categories: [], tags: [], recipes: [], recipe_ingredients: [], recipe_tags: [], recipe_ratings: [], cook_history: [], notes: [], prospects: [], offers: [] }
 const now = () => new Date().toISOString()
 const defaults = {
   shopping_items: () => ({ id: uuid(), checked: false, checked_at: null, created_by: USER.id, created_at: now(), category: 'Sonstiges' }),
@@ -15,6 +15,8 @@ const defaults = {
   recipe_ingredients: () => ({ id: uuid(), sort_order: 0 }),
   recipe_ratings: () => ({ id: uuid(), note: null, modifications: [] }),
   cook_history: () => ({ id: uuid(), cooked_at: now(), cooked_by: USER.id }),
+  prospects: () => ({ id: uuid(), status: 'uploaded', error: null, file_name: null, valid_from: null, valid_to: null, chunk_paths: [], chunks_total: 0, chunks_done: 0, offer_count: 0, created_at: now() }),
+  offers: () => ({ id: uuid(), brand: null, quantity: null, original_price: null, base_price: null, condition: null, valid_from: null, valid_to: null, page: 1 }),
   notes: () => ({ id: uuid(), title: '', preview: '', pinned: false, content: { type: 'doc', content: [{ type: 'paragraph' }] }, updated_by: USER.id, updated_at: now(), created_at: now() }),
 }
 const pk = { taste_profile: ['household_id'], suggestion_cache: ['household_id'], suggestion_feedback: ['household_id', 'name'], recipe_tags: ['recipe_id', 'tag_id'], recipe_ratings: ['recipe_id', 'user_id'], tags: ['household_id', 'name'] }
@@ -86,6 +88,20 @@ const server = http.createServer(async (req, res) => {
     const list = body.action === 'suggest' ? [mk('Dal Makhani'), mk('Paneer Butter Masala')] : [mk('Resteomelett')]
     if (body.action === 'suggest') { const h = db.households[0].id; db.suggestion_cache = [{ household_id: h, suggestions: list, created_at: now() }] }
     return send(200, { suggestions: list })
+  }
+  if (p === '/functions/v1/import-recipe' && body?.action === 'prospect') {
+    const pr = db.prospects.find((x) => x.id === body.prospect_id)
+    if (!pr) return send(404, { error: 'Diesen Prospekt gibt es nicht.' })
+    globalThis.lastAction = { action: 'prospect', chunks: pr.chunk_paths }
+    const mk = (name, price, extra = {}) => ({ ...defaults.offers(), household_id: pr.household_id, prospect_id: pr.id, store: pr.store, name, price, ...extra })
+    db.offers = db.offers.filter((o) => o.prospect_id !== pr.id).concat([
+      mk('Hackfleisch gemischt', 3.99, { quantity: '500 g', original_price: 5.49, base_price: '1 kg = 7,98 €' }),
+      mk('Rispentomaten', 0.99, { quantity: '500 g' }),
+      mk('Tomaten', 1.29, { quantity: '1 kg', condition: 'mit App' }),
+      mk('Spaghetti', 0.79, { brand: 'Barilla', quantity: '500 g' }),
+    ])
+    Object.assign(pr, { status: 'ready', chunks_done: pr.chunks_total, offer_count: 4, chunk_paths: [], valid_from: pr.valid_from ?? '2026-11-23', valid_to: pr.valid_to ?? '2026-11-28' })
+    return send(202, { started: true })
   }
   if (p === '/__last_action') return send(200, globalThis.lastAction ?? null)
   if (p === '/functions/v1/import-recipe' && body?.action === 'screenshots') {
